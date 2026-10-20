@@ -30,7 +30,7 @@ USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
 
-# --- خادم الويب الأساسي لإرضاء فحص منصة Railway ---
+# --- خادم الويب الآمن لإرضاء فحص منصة Railway ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -90,7 +90,7 @@ def get_random_netflix():
                 "login": "https://www.netflix.com/login"
             }
     except Exception as e:
-        print(f"{Fore.RED}[!] Netflix Error: {e}")
+        print(f"Netflix Error: {e}")
         return None
 
 def get_random_text_account(file_path, platform_name):
@@ -133,7 +133,7 @@ def get_random_text_account(file_path, platform_name):
             "login": login_urls.get(platform_name, "https://www.g2a.com/")
         }
     except Exception as e:
-        print(f"{Fore.RED}[!] Error reading {platform_name}: {e}")
+        print(f"Error reading {platform_name}: {e}")
         return None
 
 def fetch_account_by_platform(platform_name):
@@ -522,7 +522,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f.writelines(updated_lines)
 
         if found_platform:
-            print(f"{Fore.YELLOW}[REDEEM ALERT] User {username_str} (ID: {user_id}) successfully used code '{user_code}' for platform: {found_platform.upper()}{Style.RESET_ALL}")
+            print(f"[REDEEM ALERT] User {username_str} (ID: {user_id}) successfully used code '{user_code}' for platform: {found_platform.upper()}")
             
             account = fetch_account_by_platform(found_platform)
             if not account:
@@ -658,7 +658,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "report_broken":
-        print(f"{Fore.RED}[REPORT] User {username_str} reported a broken account!{Style.RESET_ALL}")
+        print(f"[REPORT] User {username_str} reported a broken account!")
         await query.message.reply_text("🚨 **Report Received:** This account has been flagged as non-working and logged for replacement!")
     elif query.data == "help_redeem":
         await query.message.reply_text(
@@ -670,64 +670,74 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 def run_telegram_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    async def start_bot():
-        request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
-        app = Application.builder().token(TOKEN).request(request_settings).build()
-        
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("netflix", get_netflix))
-        app.add_handler(CommandHandler("crunchyroll", get_crunchyroll))
-        app.add_handler(CommandHandler("minecraft", get_minecraft))
-        app.add_handler(CommandHandler("iptv", get_iptv))
-        app.add_handler(CommandHandler("hotmail", get_hotmail))
-        app.add_handler(CommandHandler("steam", get_steam))
-        app.add_handler(CommandHandler("spotify", get_spotify))
-        app.add_handler(CommandHandler("kick", get_kick))
-        app.add_handler(CommandHandler("g2a", get_g2a))
-        
-        app.add_handler(CommandHandler("addstock", add_stock_file))
-        app.add_handler(CommandHandler("addcode", add_code))
-        app.add_handler(CommandHandler("redeem", redeem_code))
-        app.add_handler(CommandHandler("reedem", redeem_code))
-
-        app.add_handler(CommandHandler("check", check_stock_command))
-        app.add_handler(CommandHandler("stock", stock_dashboard))
-        app.add_handler(CommandHandler("clearstock", clear_stock_command))
-        app.add_handler(CommandHandler("broadcast", broadcast_command))
-
-        app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
-        app.add_handler(CallbackQueryHandler(button_handler))
-
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling()
-        print(Fore.GREEN + Style.BRIGHT + " [🚀] Telegram Bot started successfully in background loop!" + Style.RESET_ALL)
-        
-        await asyncio.Event().wait()
-
     try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        async def start_bot():
+            request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
+            app = Application.builder().token(TOKEN).request(request_settings).build()
+            
+            app.add_handler(CommandHandler("start", start))
+            app.add_handler(CommandHandler("netflix", get_netflix))
+            app.add_handler(CommandHandler("crunchyroll", get_crunchyroll))
+            app.add_handler(CommandHandler("minecraft", get_minecraft))
+            app.add_handler(CommandHandler("iptv", get_iptv))
+            app.add_handler(CommandHandler("hotmail", get_hotmail))
+            app.add_handler(CommandHandler("steam", get_steam))
+            app.add_handler(CommandHandler("spotify", get_spotify))
+            app.add_handler(CommandHandler("kick", get_kick))
+            app.add_handler(CommandHandler("g2a", get_g2a))
+            
+            app.add_handler(CommandHandler("addstock", add_stock_file))
+            app.add_handler(CommandHandler("addcode", add_code))
+            app.add_handler(CommandHandler("redeem", redeem_code))
+            app.add_handler(CommandHandler("reedem", redeem_code))
+
+            app.add_handler(CommandHandler("check", check_stock_command))
+            app.add_handler(CommandHandler("stock", stock_dashboard))
+            app.add_handler(CommandHandler("clearstock", clear_stock_command))
+            app.add_handler(CommandHandler("broadcast", broadcast_command))
+
+            app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
+            app.add_handler(CallbackQueryHandler(button_handler))
+
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling()
+            print("Telegram Bot started successfully in background loop!")
+            
+            await asyncio.Event().wait()
+
         loop.run_until_complete(start_bot())
     except Exception as e:
         print(f"Bot thread error: {e}")
 
 def main():
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
-    print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
-    print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
+    print("="*65)
+    print("    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
+    print("="*65)
+    print(f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
+    print("="*65)
 
-    # تشغيل بوت تيليجرام في خيط منفصل مع حلقة أحداث مخصصة لتجنب أي تعارض
+    # تشغيل بوت تيليجرام في خيط منفصل
     threading.Thread(target=run_telegram_bot, daemon=True).start()
 
-    # تشغيل خادم الويب على العملية الأساسية لفتح البورت وإرضاء فحص Railway فوراً
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    print(Fore.GREEN + f" [🌐] Health Check Web Server running on port {port}..." + Style.RESET_ALL)
-    server.serve_forever()
+    # تشغيل خادم الويب مع حماية كاملة لقراءة بورت Railway
+    port = 8080
+    try:
+        port_env = os.environ.get("PORT")
+        if port_env:
+            port = int(port_env)
+    except Exception:
+        port = 8080
+
+    try:
+        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+        print(f"Health Check Web Server running on port {port}...")
+        server.serve_forever()
+    except Exception as e:
+        print(f"Web server error: {e}")
 
 if __name__ == "__main__":
     main()
