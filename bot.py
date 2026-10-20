@@ -7,7 +7,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
-# Initialize terminal colors
 init(autoreset=True)
 
 TOKEN = "7946580929:AAFOWq2gREmKfZmrNsRMqBOqpdFLZp97oB4"
@@ -24,6 +23,7 @@ SPOTIFY_FILE = os.path.join(BASE_DIR, "spotify_accounts.txt")
 KICK_FILE = os.path.join(BASE_DIR, "kick_accounts.txt")
 G2A_FILE = os.path.join(BASE_DIR, "g2a_accounts.txt")
 CODES_FILE = os.path.join(BASE_DIR, "codes_db.txt")
+USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
 
@@ -32,6 +32,18 @@ def is_authorized(update: Update) -> bool:
     if user and user.username:
         return user.username.lower() == ALLOWED_USERNAME.lower()
     return False
+
+def save_user(user_id):
+    try:
+        users = set()
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                users = set(line.strip() for line in f if line.strip())
+        if str(user_id) not in users:
+            with open(USERS_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{user_id}\n")
+    except Exception:
+        pass
 
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.animation:
@@ -136,6 +148,10 @@ def fetch_account_by_platform(platform_name):
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user:
+        save_user(user.id)
+
     welcome_text = (
         "✨ ════════════════════════════ ✨\n"
         "🔥 **WELCOME TO THE ULTIMATE VIP VAULT** 🔥\n"
@@ -148,12 +164,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_authorized(update):
         welcome_text += (
-            "👑 **Admin Commands (Stock Gen):**\n"
+            "👑 **Admin Commands & Features:**\n"
             "🍿 /netflix  |  🌸 /crunchyroll  |  ⛏️ /minecraft\n"
             "📺 /iptv     |  📧 /hotmail     |  🎮 /steam\n"
             "🎧 /spotify  |  🟣 /kick        |  🛒 /g2a\n\n"
-            "📥 /addstock <platform> — Send a .txt or .zip file with this command to auto-sort & add stock!\n"
+            "📥 /addstock <platform> — Auto-sort & add stock files\n"
             "➕ /addcode <code> <platform> — Link a code to stock\n"
+            "🔄 /check — Clean & validate all stock databases\n"
+            "📊 /stock — Live inventory stock statistics\n"
+            "🗑️ /clearstock <platform> — Reset platform stock\n"
+            "📢 /broadcast <message> — Broadcast message to users\n\n"
         )
     
     welcome_text += "✨ ════════════════════════════ ✨"
@@ -170,6 +190,162 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
+
+# --- Feature 1: /check Command ---
+async def check_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
+        return
+
+    files_to_check = {
+        "Crunchyroll": CRUNCHYROLL_FILE,
+        "Minecraft": MINECRAFT_FILE,
+        "Hotmail": HOTMAIL_FILE,
+        "IPTV": IPTV_FILE,
+        "Steam": STEAM_FILE,
+        "Spotify": SPOTIFY_FILE,
+        "Kick": KICK_FILE,
+        "G2A": G2A_FILE
+    }
+
+    report = "🔄 **Stock Health Check & Cleanup Report:**\n\n"
+    total_valid = 0
+    total_removed = 0
+
+    for name, filepath in files_to_check.items():
+        if not os.path.exists(filepath):
+            report += f"• **{name}:** File not found\n"
+            continue
+
+        valid_lines = []
+        removed = 0
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+
+            for line in lines:
+                clean = line.strip()
+                if clean and not clean.startswith("#") and ":" in clean:
+                    valid_lines.append(clean + "\n")
+                else:
+                    removed += 1
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.writelines(valid_lines)
+
+            total_valid += len(valid_lines)
+            total_removed += removed
+            report += f"• **{name}:** 🟢 Valid: {len(valid_lines)} | 🔴 Cleaned: {removed}\n"
+        except Exception as e:
+            report += f"• **{name}:** Error\n"
+
+    report += f"\n📊 **Total Valid Accounts:** {total_valid}\n"
+    report += f"🧹 **Total Junk Removed:** {total_removed}"
+    await update.message.reply_text(report, parse_mode="Markdown")
+
+# --- Feature 2: /stock Command ---
+async def stock_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
+        return
+
+    platforms = {
+        "Netflix (ZIP)": NETFLIX_ZIP,
+        "Crunchyroll": CRUNCHYROLL_FILE,
+        "Minecraft": MINECRAFT_FILE,
+        "Hotmail": HOTMAIL_FILE,
+        "IPTV": IPTV_FILE,
+        "Steam": STEAM_FILE,
+        "Spotify": SPOTIFY_FILE,
+        "Kick": KICK_FILE,
+        "G2A": G2A_FILE
+    }
+
+    msg = "📊 **VIP Vault Live Stock Inventory:**\n\n"
+    for name, path in platforms.items():
+        count = 0
+        if os.path.exists(path):
+            if name.startswith("Netflix"):
+                try:
+                    with zipfile.ZipFile(path, 'r') as arch:
+                        count = len([f for f in arch.infolist() if not f.is_dir() and f.filename.endswith('.txt')])
+                except:
+                    count = 0
+            else:
+                try:
+                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                        count = len([l for l in f if l.strip() and not l.startswith("#")])
+                except:
+                    count = 0
+        msg += f"• **{name}:** {count} accounts available\n"
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+# --- Feature 3: /clearstock Command ---
+async def clear_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ **Usage:** /clearstock <platform>\nPlatforms: crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse_mode="Markdown")
+        return
+
+    platform = args[0].lower().strip()
+    file_map = {
+        "crunchyroll": CRUNCHYROLL_FILE,
+        "minecraft": MINECRAFT_FILE,
+        "hotmail": HOTMAIL_FILE,
+        "iptv": IPTV_FILE,
+        "steam": STEAM_FILE,
+        "spotify": SPOTIFY_FILE,
+        "kick": KICK_FILE,
+        "g2a": G2A_FILE
+    }
+
+    if platform not in file_map:
+        await update.message.reply_text(f"⚠️ **Invalid platform!** Choose from: {', '.join(file_map.keys())}")
+        return
+
+    target_file = file_map[platform]
+    try:
+        with open(target_file, "w", encoding="utf-8") as f:
+            f.write("")
+        await update.message.reply_text(f"🗑️ **Success!** Stock file for {platform.upper()} has been completely cleared and reset.", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error clearing stock: {e}")
+
+# --- Feature 4: /broadcast Command ---
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
+        return
+
+    text = " ".join(context.args)
+    if not text:
+        await update.message.reply_text("⚠️ **Usage:** /broadcast <your announcement message>", parse_mode="Markdown")
+        return
+
+    if not os.path.exists(USERS_FILE):
+        await update.message.reply_text("⚠️ No user records found yet.")
+        return
+
+    success = 0
+    failed = 0
+    with open(USERS_FILE, "r", encoding="utf-8") as f:
+        user_ids = [line.strip() for line in f if line.strip()]
+
+    status_msg = await update.message.reply_text(f"📢 Broadcasting to {len(user_ids)} users...", parse_mode="Markdown")
+
+    for uid in user_ids:
+        try:
+            await context.bot.send_message(chat_id=int(uid), text=f"📢 **Announcement:**\n\n{text}", parse_mode="Markdown")
+            success += 1
+        except Exception:
+            failed += 1
+
+    await status_msg.edit_text(f"✅ **Broadcast Complete!**\n\nSent: {success}\nFailed: {failed}", parse_mode="Markdown")
 
 async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -300,6 +476,8 @@ etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse
 
 async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    if user:
+        save_user(user.id)
     username_str = f"@{user.username}" if user.username else user.first_name
     user_id = user.id
 
@@ -510,6 +688,12 @@ def main():
     app.add_handler(CommandHandler("addcode", add_code))
     app.add_handler(CommandHandler("redeem", redeem_code))
     app.add_handler(CommandHandler("reedem", redeem_code))
+
+    # Features added
+    app.add_handler(CommandHandler("check", check_stock_command))
+    app.add_handler(CommandHandler("stock", stock_dashboard))
+    app.add_handler(CommandHandler("clearstock", clear_stock_command))
+    app.add_handler(CommandHandler("broadcast", broadcast_command))
 
     app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
     app.add_handler(CallbackQueryHandler(button_handler))
