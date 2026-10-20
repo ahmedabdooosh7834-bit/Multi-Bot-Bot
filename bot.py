@@ -159,7 +159,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- إضافة خدمة جديدة ديناميكياً ---
 async def add_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -181,7 +180,6 @@ async def add_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(f"# Accounts database for {service_name}\n")
 
-        # تسجيل الأمر ديناميكياً
         context.application.add_handler(CommandHandler(service_name, get_dynamic_service))
 
         await update.message.reply_text(
@@ -303,7 +301,18 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ **Unsupported format:** Please upload only `.txt` or `.zip` files.")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
+        err_msg = str(e).lower()
+        if "too big" in err_msg or "400" in err_msg or "file is too big" in err_msg:
+            await update.message.reply_text(
+                "⚠️ **تنبيه هام جداً بخصوص حجم الملف:**\n\n"
+                "يا غالي، شركة **تيليجرام** تفرض حداً تقنياً صارماً على جميع البوتات (`20 ميجابايت كحد أقصى` لتحميل الملفات من الدردشة).\n"
+                "أي ملف حجمه أكبر من ذلك (مثل 500 ميجا)، ترفض سيرفرات تيليجرام إرساله للبوت من الأساس ولا يستطيع البوت تحميله.\n\n"
+                "💡 **الحل السريع:**\n"
+                "قم بتقسيم ملف الستوك الكبير إلى عدة ملفات صغيرة (أقل من 20 ميجا لكل ملف) ورفعها تباعاً، وسيقوم البوت بدمجها تلقائياً وبكل سهولة! 🚀",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(f"❌ Error: {e}")
 
 async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -523,7 +532,6 @@ def main():
     app.add_handler(CommandHandler("kick", get_kick))
     app.add_handler(CommandHandler("g2a", get_g2a))
     
-    # تحميل الأوامر الأساسية والأدوات
     app.add_handler(CommandHandler("addserviece", add_service))
     app.add_handler(CommandHandler("addstock", add_stock_file))
     app.add_handler(CommandHandler("addcode", add_code))
@@ -531,7 +539,6 @@ def main():
     app.add_handler(CommandHandler("reedem", redeem_code))
     app.add_handler(CommandHandler("check", check_stock))
 
-    # تحميل أي خدمات إضافية تم إنشاؤها مسبقاً ديناميكياً
     for filename in os.listdir(BASE_DIR):
         if filename.endswith("_accounts.txt"):
             serv_name = filename.replace("_accounts.txt", "").lower()
