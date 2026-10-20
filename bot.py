@@ -2,6 +2,7 @@
 import re
 import random
 import zipfile
+import asyncio
 import threading
 from flask import Flask
 from colorama import init, Fore, Style
@@ -29,16 +30,12 @@ USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
 
-# --- خادم الويب المستقر باستخدام Flask لإرضاء منصة Railway ---
+# --- خادم الويب المستقر لمنصة Railway ---
 app_flask = Flask(__name__)
 
 @app_flask.route('/')
 def health_check():
     return "Bot is alive and running!", 200
-
-def run_flask_server():
-    port = int(os.environ.get("PORT", 8080))
-    app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 def is_authorized(update: Update) -> bool:
     user = update.effective_user
@@ -177,13 +174,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_authorized(update):
         welcome_text += (
-            "👑 **Admin Commands & Features:**\n"
+            "👑 **Admin Commands:**\n"
             "🍿 /netflix  |  🌸 /crunchyroll  |  ⛏️ /minecraft\n"
             "📺 /iptv     |  📧 /hotmail     |  🎮 /steam\n"
             "🎧 /spotify  |  🟣 /kick        |  🛒 /g2a\n\n"
             "📥 /addstock <platform> — Auto-sort & add stock files\n"
             "➕ /addcode <code> <platform> — Link a code to stock\n"
-            "🔄 /check — Clean & validate all stock databases\n"
             "📊 /stock — Live inventory stock statistics\n"
             "🗑️ /clearstock <platform> — Reset platform stock\n"
             "📢 /broadcast <message> — Broadcast message to users\n\n"
@@ -203,57 +199,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
-
-async def check_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update):
-        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
-        return
-
-    files_to_check = {
-        "Crunchyroll": CRUNCHYROLL_FILE,
-        "Minecraft": MINECRAFT_FILE,
-        "Hotmail": HOTMAIL_FILE,
-        "IPTV": IPTV_FILE,
-        "Steam": STEAM_FILE,
-        "Spotify": SPOTIFY_FILE,
-        "Kick": KICK_FILE,
-        "G2A": G2A_FILE
-    }
-
-    report = "🔄 **Stock Health Check & Cleanup Report:**\n\n"
-    total_valid = 0
-    total_removed = 0
-
-    for name, filepath in files_to_check.items():
-        if not os.path.exists(filepath):
-            report += f"• **{name}:** File not found\n"
-            continue
-
-        valid_lines = []
-        removed = 0
-        try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
-
-            for line in lines:
-                clean = line.strip()
-                if clean and not clean.startswith("#") and ":" in clean:
-                    valid_lines.append(clean + "\n")
-                else:
-                    removed += 1
-
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.writelines(valid_lines)
-
-            total_valid += len(valid_lines)
-            total_removed += removed
-            report += f"• **{name}:** 🟢 Valid: {len(valid_lines)} | 🔴 Cleaned: {removed}\n"
-        except Exception:
-            report += f"• **{name}:** Error\n"
-
-    report += f"\n📊 **Total Valid Accounts:** {total_valid}\n"
-    report += f"🧹 **Total Junk Removed:** {total_removed}"
-    await update.message.reply_text(report, parse_mode="Markdown")
 
 async def stock_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -695,7 +640,6 @@ def run_telegram_bot():
             app.add_handler(CommandHandler("redeem", redeem_code))
             app.add_handler(CommandHandler("reedem", redeem_code))
 
-            app.add_handler(CommandHandler("check", check_stock_command))
             app.add_handler(CommandHandler("stock", stock_dashboard))
             app.add_handler(CommandHandler("clearstock", clear_stock_command))
             app.add_handler(CommandHandler("broadcast", broadcast_command))
@@ -721,10 +665,10 @@ def main():
     print(f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
     print("="*65)
 
-    # تشغيل بوت تيليجرام في خيط منفصل
+    # تشغيل بوت تيليجرام في خيط خلفي مستقل
     threading.Thread(target=run_telegram_bot, daemon=True).start()
 
-    # تشغيل خادم Flask على العملية الرئيسية لضمان الاستجابة الفورية لبورت Railway
+    # تشغيل خادم Flask على العملية الرئيسية لضمان الرد على Railway ومنع الـ CRASHED
     port = int(os.environ.get("PORT", 8080))
     print(f"Flask Web Server running on port {port}...")
     app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
