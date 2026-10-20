@@ -2,14 +2,12 @@
 import re
 import random
 import zipfile
-import asyncio
-import threading
-from flask import Flask
 from colorama import init, Fore, Style
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
+# Initialize terminal colors
 init(autoreset=True)
 
 TOKEN = "7946580929:AAFOWq2gREmKfZmrNsRMqBOqpdFLZp97oB4"
@@ -26,34 +24,14 @@ SPOTIFY_FILE = os.path.join(BASE_DIR, "spotify_accounts.txt")
 KICK_FILE = os.path.join(BASE_DIR, "kick_accounts.txt")
 G2A_FILE = os.path.join(BASE_DIR, "g2a_accounts.txt")
 CODES_FILE = os.path.join(BASE_DIR, "codes_db.txt")
-USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
-
-# --- خادم الويب المستقر لمنصة Railway ---
-app_flask = Flask(__name__)
-
-@app_flask.route('/')
-def health_check():
-    return "Bot is alive and running!", 200
 
 def is_authorized(update: Update) -> bool:
     user = update.effective_user
     if user and user.username:
         return user.username.lower() == ALLOWED_USERNAME.lower()
     return False
-
-def save_user(user_id):
-    try:
-        users = set()
-        if os.path.exists(USERS_FILE):
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                users = set(line.strip() for line in f if line.strip())
-        if str(user_id) not in users:
-            with open(USERS_FILE, "a", encoding="utf-8") as f:
-                f.write(f"{user_id}\n")
-    except Exception:
-        pass
 
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.animation:
@@ -88,7 +66,7 @@ def get_random_netflix():
                 "login": "https://www.netflix.com/login"
             }
     except Exception as e:
-        print(f"Netflix Error: {e}")
+        print(f"{Fore.RED}[!] Netflix Error: {e}")
         return None
 
 def get_random_text_account(file_path, platform_name):
@@ -131,7 +109,7 @@ def get_random_text_account(file_path, platform_name):
             "login": login_urls.get(platform_name, "https://www.g2a.com/")
         }
     except Exception as e:
-        print(f"Error reading {platform_name}: {e}")
+        print(f"{Fore.RED}[!] Error reading {platform_name}: {e}")
         return None
 
 def fetch_account_by_platform(platform_name):
@@ -158,10 +136,6 @@ def fetch_account_by_platform(platform_name):
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user:
-        save_user(user.id)
-
     welcome_text = (
         "✨ ════════════════════════════ ✨\n"
         "🔥 **WELCOME TO THE ULTIMATE VIP VAULT** 🔥\n"
@@ -174,15 +148,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_authorized(update):
         welcome_text += (
-            "👑 **Admin Commands:**\n"
+            "👑 **Admin Commands (Stock Gen):**\n"
             "🍿 /netflix  |  🌸 /crunchyroll  |  ⛏️ /minecraft\n"
             "📺 /iptv     |  📧 /hotmail     |  🎮 /steam\n"
             "🎧 /spotify  |  🟣 /kick        |  🛒 /g2a\n\n"
-            "📥 /addstock <platform> — Auto-sort & add stock files\n"
+            "📥 /addstock <platform> — Send a .txt or .zip file with this command to auto-sort & add stock!\n"
             "➕ /addcode <code> <platform> — Link a code to stock\n"
-            "📊 /stock — Live inventory stock statistics\n"
-            "🗑️ /clearstock <platform> — Reset platform stock\n"
-            "📢 /broadcast <message> — Broadcast message to users\n\n"
         )
     
     welcome_text += "✨ ════════════════════════════ ✨"
@@ -199,107 +170,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
-
-async def stock_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update):
-        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
-        return
-
-    platforms = {
-        "Netflix (ZIP)": NETFLIX_ZIP,
-        "Crunchyroll": CRUNCHYROLL_FILE,
-        "Minecraft": MINECRAFT_FILE,
-        "Hotmail": HOTMAIL_FILE,
-        "IPTV": IPTV_FILE,
-        "Steam": STEAM_FILE,
-        "Spotify": SPOTIFY_FILE,
-        "Kick": KICK_FILE,
-        "G2A": G2A_FILE
-    }
-
-    msg = "📊 **VIP Vault Live Stock Inventory:**\n\n"
-    for name, path in platforms.items():
-        count = 0
-        if os.path.exists(path):
-            if name.startswith("Netflix"):
-                try:
-                    with zipfile.ZipFile(path, 'r') as arch:
-                        count = len([f for f in arch.infolist() if not f.is_dir() and f.filename.endswith('.txt')])
-                except:
-                    count = 0
-            else:
-                try:
-                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                        count = len([l for l in f if l.strip() and not l.startswith("#")])
-                except:
-                    count = 0
-        msg += f"• **{name}:** {count} accounts available\n"
-
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-async def clear_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update):
-        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
-        return
-
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ **Usage:** /clearstock <platform>\nPlatforms: crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse_mode="Markdown")
-        return
-
-    platform = args[0].lower().strip()
-    file_map = {
-        "crunchyroll": CRUNCHYROLL_FILE,
-        "minecraft": MINECRAFT_FILE,
-        "hotmail": HOTMAIL_FILE,
-        "iptv": IPTV_FILE,
-        "steam": STEAM_FILE,
-        "spotify": SPOTIFY_FILE,
-        "kick": KICK_FILE,
-        "g2a": G2A_FILE
-    }
-
-    if platform not in file_map:
-        await update.message.reply_text(f"⚠️ **Invalid platform!** Choose from: {', '.join(file_map.keys())}")
-        return
-
-    target_file = file_map[platform]
-    try:
-        with open(target_file, "w", encoding="utf-8") as f:
-            f.write("")
-        await update.message.reply_text(f"🗑️ **Success!** Stock file for {platform.upper()} has been completely cleared and reset.", parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error clearing stock: {e}")
-
-async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update):
-        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
-        return
-
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("⚠️ **Usage:** /broadcast <your announcement message>", parse_mode="Markdown")
-        return
-
-    if not os.path.exists(USERS_FILE):
-        await update.message.reply_text("⚠️ No user records found yet.")
-        return
-
-    success = 0
-    failed = 0
-    with open(USERS_FILE, "r", encoding="utf-8") as f:
-        user_ids = [line.strip() for line in f if line.strip()]
-
-    status_msg = await update.message.reply_text(f"📢 Broadcasting to {len(user_ids)} users...", parse_mode="Markdown")
-
-    for uid in user_ids:
-        try:
-            await context.bot.send_message(chat_id=int(uid), text=f"📢 **Announcement:**\n\n{text}", parse_mode="Markdown")
-            success += 1
-        except Exception:
-            failed += 1
-
-    await status_msg.edit_text(f"✅ **Broadcast Complete!**\n\nSent: {success}\nFailed: {failed}", parse_mode="Markdown")
 
 async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -430,8 +300,6 @@ etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse
 
 async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user:
-        save_user(user.id)
     username_str = f"@{user.username}" if user.username else user.first_name
     user_id = user.id
 
@@ -468,7 +336,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f.writelines(updated_lines)
 
         if found_platform:
-            print(f"[REDEEM ALERT] User {username_str} (ID: {user_id}) successfully used code '{user_code}' for platform: {found_platform.upper()}")
+            print(f"{Fore.YELLOW}[REDEEM ALERT] User {username_str} (ID: {user_id}) successfully used code '{user_code}' for platform: {found_platform.upper()}{Style.RESET_ALL}")
             
             account = fetch_account_by_platform(found_platform)
             if not account:
@@ -604,7 +472,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "report_broken":
-        print(f"[REPORT] User {username_str} reported a broken account!")
+        print(f"{Fore.RED}[REPORT] User {username_str} reported a broken account!{Style.RESET_ALL}")
         await query.message.reply_text("🚨 **Report Received:** This account has been flagged as non-working and logged for replacement!")
     elif query.data == "help_redeem":
         await query.message.reply_text(
@@ -615,63 +483,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-def run_telegram_bot():
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        async def start_bot():
-            request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
-            app = Application.builder().token(TOKEN).request(request_settings).build()
-            
-            app.add_handler(CommandHandler("start", start))
-            app.add_handler(CommandHandler("netflix", get_netflix))
-            app.add_handler(CommandHandler("crunchyroll", get_crunchyroll))
-            app.add_handler(CommandHandler("minecraft", get_minecraft))
-            app.add_handler(CommandHandler("iptv", get_iptv))
-            app.add_handler(CommandHandler("hotmail", get_hotmail))
-            app.add_handler(CommandHandler("steam", get_steam))
-            app.add_handler(CommandHandler("spotify", get_spotify))
-            app.add_handler(CommandHandler("kick", get_kick))
-            app.add_handler(CommandHandler("g2a", get_g2a))
-            
-            app.add_handler(CommandHandler("addstock", add_stock_file))
-            app.add_handler(CommandHandler("addcode", add_code))
-            app.add_handler(CommandHandler("redeem", redeem_code))
-            app.add_handler(CommandHandler("reedem", redeem_code))
-
-            app.add_handler(CommandHandler("stock", stock_dashboard))
-            app.add_handler(CommandHandler("clearstock", clear_stock_command))
-            app.add_handler(CommandHandler("broadcast", broadcast_command))
-
-            app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
-            app.add_handler(CallbackQueryHandler(button_handler))
-
-            await app.initialize()
-            await app.start()
-            await app.updater.start_polling()
-            print("Telegram Bot started successfully in background loop!")
-            
-            await asyncio.Event().wait()
-
-        loop.run_until_complete(start_bot())
-    except Exception as e:
-        print(f"Bot thread error: {e}")
-
 def main():
-    print("="*65)
-    print("    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
-    print("="*65)
-    print(f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
-    print("="*65)
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
+    print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
+    print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
+    print(Fore.GREEN + Style.BRIGHT + " [🚀] Bot is online and ready for action...\n")
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
 
-    # تشغيل بوت تيليجرام في خيط خلفي مستقل
-    threading.Thread(target=run_telegram_bot, daemon=True).start()
+    request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
 
-    # تشغيل خادم Flask على العملية الرئيسية لضمان الرد على Railway ومنع الـ CRASHED
-    port = int(os.environ.get("PORT", 8080))
-    print(f"Flask Web Server running on port {port}...")
-    app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    app = Application.builder().token(TOKEN).request(request_settings).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("netflix", get_netflix))
+    app.add_handler(CommandHandler("crunchyroll", get_crunchyroll))
+    app.add_handler(CommandHandler("minecraft", get_minecraft))
+    app.add_handler(CommandHandler("iptv", get_iptv))
+    app.add_handler(CommandHandler("hotmail", get_hotmail))
+    app.add_handler(CommandHandler("steam", get_steam))
+    app.add_handler(CommandHandler("spotify", get_spotify))
+    app.add_handler(CommandHandler("kick", get_kick))
+    app.add_handler(CommandHandler("g2a", get_g2a))
+    
+    app.add_handler(CommandHandler("addstock", add_stock_file))
+    app.add_handler(CommandHandler("addcode", add_code))
+    app.add_handler(CommandHandler("redeem", redeem_code))
+    app.add_handler(CommandHandler("reedem", redeem_code))
+
+    app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
