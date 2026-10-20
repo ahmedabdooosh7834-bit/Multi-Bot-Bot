@@ -2,6 +2,7 @@
 import re
 import random
 import zipfile
+import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from colorama import init, Fore, Style
@@ -29,19 +30,14 @@ USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
 
-# --- خادم الويب الخفي لتجاوز فحص المنصة ومنع الـ Crash ---
+# --- خادم الويب الأساسي لإرضاء فحص منصة Railway ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot is alive and running!")
+        self.wfile.write(b"Bot and Web Server are active and running!")
     def log_message(self, format, *args):
         pass
-
-def run_health_server():
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    server.serve_forever()
 
 def is_authorized(update: Update) -> bool:
     user = update.effective_user
@@ -673,19 +669,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-def main():
-    # تشغيل خادم الصحة الوهمي في الخلفية لمنع انهيار الـ Crash في Railway
-    threading.Thread(target=run_health_server, daemon=True).start()
-
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
-    print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
-    print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
-    print(Fore.GREEN + Style.BRIGHT + " [🚀] Bot is online and ready for action...\n")
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
-
+def run_telegram_bot():
     request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
-
     app = Application.builder().token(TOKEN).request(request_settings).build()
     
     app.add_handler(CommandHandler("start", start))
@@ -704,7 +689,6 @@ def main():
     app.add_handler(CommandHandler("redeem", redeem_code))
     app.add_handler(CommandHandler("reedem", redeem_code))
 
-    # Features added
     app.add_handler(CommandHandler("check", check_stock_command))
     app.add_handler(CommandHandler("stock", stock_dashboard))
     app.add_handler(CommandHandler("clearstock", clear_stock_command))
@@ -713,7 +697,24 @@ def main():
     app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
     app.add_handler(CallbackQueryHandler(button_handler))
 
+    print(Fore.GREEN + Style.BRIGHT + " [🚀] Telegram Bot polling started in background..." + Style.RESET_ALL)
     app.run_polling()
+
+def main():
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
+    print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
+    print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
+
+    # تشغيل بوت تيليجرام في خلفية الخادم
+    threading.Thread(target=run_telegram_bot, daemon=True).start()
+
+    # تشغيل خادم الويب على العملية الرئيسية ليرد على بورت Railway فوراً ويمنع الـ Crash
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    print(Fore.GREEN + f" [🌐] Health Check Web Server running on port {port}..." + Style.RESET_ALL)
+    server.serve_forever()
 
 if __name__ == "__main__":
     main()
