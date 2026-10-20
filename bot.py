@@ -670,35 +670,48 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 def run_telegram_bot():
-    request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
-    app = Application.builder().token(TOKEN).request(request_settings).build()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("netflix", get_netflix))
-    app.add_handler(CommandHandler("crunchyroll", get_crunchyroll))
-    app.add_handler(CommandHandler("minecraft", get_minecraft))
-    app.add_handler(CommandHandler("iptv", get_iptv))
-    app.add_handler(CommandHandler("hotmail", get_hotmail))
-    app.add_handler(CommandHandler("steam", get_steam))
-    app.add_handler(CommandHandler("spotify", get_spotify))
-    app.add_handler(CommandHandler("kick", get_kick))
-    app.add_handler(CommandHandler("g2a", get_g2a))
-    
-    app.add_handler(CommandHandler("addstock", add_stock_file))
-    app.add_handler(CommandHandler("addcode", add_code))
-    app.add_handler(CommandHandler("redeem", redeem_code))
-    app.add_handler(CommandHandler("reedem", redeem_code))
+    async def start_bot():
+        request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
+        app = Application.builder().token(TOKEN).request(request_settings).build()
+        
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("netflix", get_netflix))
+        app.add_handler(CommandHandler("crunchyroll", get_crunchyroll))
+        app.add_handler(CommandHandler("minecraft", get_minecraft))
+        app.add_handler(CommandHandler("iptv", get_iptv))
+        app.add_handler(CommandHandler("hotmail", get_hotmail))
+        app.add_handler(CommandHandler("steam", get_steam))
+        app.add_handler(CommandHandler("spotify", get_spotify))
+        app.add_handler(CommandHandler("kick", get_kick))
+        app.add_handler(CommandHandler("g2a", get_g2a))
+        
+        app.add_handler(CommandHandler("addstock", add_stock_file))
+        app.add_handler(CommandHandler("addcode", add_code))
+        app.add_handler(CommandHandler("redeem", redeem_code))
+        app.add_handler(CommandHandler("reedem", redeem_code))
 
-    app.add_handler(CommandHandler("check", check_stock_command))
-    app.add_handler(CommandHandler("stock", stock_dashboard))
-    app.add_handler(CommandHandler("clearstock", clear_stock_command))
-    app.add_handler(CommandHandler("broadcast", broadcast_command))
+        app.add_handler(CommandHandler("check", check_stock_command))
+        app.add_handler(CommandHandler("stock", stock_dashboard))
+        app.add_handler(CommandHandler("clearstock", clear_stock_command))
+        app.add_handler(CommandHandler("broadcast", broadcast_command))
 
-    app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
-    app.add_handler(CallbackQueryHandler(button_handler))
+        app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
+        app.add_handler(CallbackQueryHandler(button_handler))
 
-    print(Fore.GREEN + Style.BRIGHT + " [🚀] Telegram Bot polling started in background..." + Style.RESET_ALL)
-    app.run_polling()
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        print(Fore.GREEN + Style.BRIGHT + " [🚀] Telegram Bot started successfully in background loop!" + Style.RESET_ALL)
+        
+        await asyncio.Event().wait()
+
+    try:
+        loop.run_until_complete(start_bot())
+    except Exception as e:
+        print(f"Bot thread error: {e}")
 
 def main():
     print(Fore.MAGENTA + Style.BRIGHT + "="*65)
@@ -707,10 +720,10 @@ def main():
     print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
     print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
 
-    # تشغيل بوت تيليجرام في خلفية الخادم
+    # تشغيل بوت تيليجرام في خيط منفصل مع حلقة أحداث مخصصة لتجنب أي تعارض
     threading.Thread(target=run_telegram_bot, daemon=True).start()
 
-    # تشغيل خادم الويب على العملية الرئيسية ليرد على بورت Railway فوراً ويمنع الـ Crash
+    # تشغيل خادم الويب على العملية الأساسية لفتح البورت وإرضاء فحص Railway فوراً
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
     print(Fore.GREEN + f" [🌐] Health Check Web Server running on port {port}..." + Style.RESET_ALL)
