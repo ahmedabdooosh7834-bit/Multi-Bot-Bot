@@ -2,6 +2,8 @@
 import re
 import random
 import zipfile
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from colorama import init, Fore, Style
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -26,6 +28,20 @@ CODES_FILE = os.path.join(BASE_DIR, "codes_db.txt")
 USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
+
+# --- خادم الويب الخفي لتجاوز فحص المنصة ومنع الـ Crash ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive and running!")
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server.serve_forever()
 
 def is_authorized(update: Update) -> bool:
     user = update.effective_user
@@ -191,7 +207,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- Feature 1: /check Command ---
 async def check_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -236,14 +251,13 @@ async def check_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             total_valid += len(valid_lines)
             total_removed += removed
             report += f"• **{name}:** 🟢 Valid: {len(valid_lines)} | 🔴 Cleaned: {removed}\n"
-        except Exception as e:
+        except Exception:
             report += f"• **{name}:** Error\n"
 
     report += f"\n📊 **Total Valid Accounts:** {total_valid}\n"
     report += f"🧹 **Total Junk Removed:** {total_removed}"
     await update.message.reply_text(report, parse_mode="Markdown")
 
-# --- Feature 2: /stock Command ---
 async def stock_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -281,7 +295,6 @@ async def stock_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# --- Feature 3: /clearstock Command ---
 async def clear_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -316,7 +329,6 @@ async def clear_stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         await update.message.reply_text(f"❌ Error clearing stock: {e}")
 
-# --- Feature 4: /broadcast Command ---
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -662,6 +674,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 def main():
+    # تشغيل خادم الصحة الوهمي في الخلفية لمنع انهيار الـ Crash في Railway
+    threading.Thread(target=run_health_server, daemon=True).start()
+
     print(Fore.MAGENTA + Style.BRIGHT + "="*65)
     print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
     print(Fore.MAGENTA + Style.BRIGHT + "="*65)
