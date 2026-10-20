@@ -2,10 +2,12 @@
 import re
 import random
 import zipfile
+import asyncio
 from colorama import init, Fore, Style
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
+from playwright.async_api import async_playwright
 
 init(autoreset=True)
 
@@ -37,36 +39,23 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = update.message.animation.file_id
         await update.message.reply_text(f"✨ **GIF File ID:**\n`{file_id}`", parse_mode="Markdown")
 
-def get_random_netflix():
+def get_random_netflix_cookie():
     if not os.path.exists(NETFLIX_ZIP):
-        return None
+        return None, None
     try:
         with zipfile.ZipFile(NETFLIX_ZIP, 'r') as archive:
             file_list = [f for f in archive.infolist() if not f.is_dir() and f.filename.endswith('.txt')]
             if not file_list:
-                return None
+                return None, None
             selected_file = random.choice(file_list)
             filename = os.path.basename(selected_file.filename)
-            tags = re.findall(r'\[(.*?)\]', filename)
-            plan = tags[0].strip() if len(tags) >= 1 and tags[0].strip() else "Netflix Premium VIP"
-            region = tags[3].strip() if len(tags) >= 4 else "Global"
-            email = tags[4].strip() if len(tags) >= 5 else "netflix_user@vip.com"
-
+            
             with archive.open(selected_file) as f:
                 cookie_content = f.read().decode('utf-8', errors='ignore').strip()
-
-            return {
-                "platform": "Netflix",
-                "email": email,
-                "password": "🔐 Secure Session Cookie",
-                "plan": plan,
-                "region": region,
-                "data": cookie_content,
-                "login": "https://www.netflix.com/login"
-            }
+            return cookie_content, filename
     except Exception as e:
-        print(f"{Fore.RED}[!] Netflix Error: {e}")
-        return None
+        print(f"{Fore.RED}[!] Netflix Cookie Error: {e}")
+        return None, None
 
 def get_random_text_account(file_path, platform_name):
     if not os.path.exists(file_path):
@@ -114,7 +103,8 @@ def get_random_text_account(file_path, platform_name):
 def fetch_account_by_platform(platform_name):
     p = platform_name.lower()
     if "net" in p:
-        return get_random_netflix()
+        cookie, name = get_random_netflix_cookie()
+        return {"platform": "Netflix", "email": name, "password": "Cookie Session", "plan": "Premium UHD", "region": "Global", "data": cookie, "login": "https://www.netflix.com/login"}
     else:
         file_path = os.path.join(BASE_DIR, f"{p}_accounts.txt")
         if os.path.exists(file_path):
@@ -129,7 +119,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🛡 **System Status:** `Online & Secured`\n"
         "⚡ **Master Controller:** `@Akk_Taiyou_Asano`\n\n"
         "🎯 **Available Commands:**\n"
-        "🎁 `/redeem <CODE>` — Redeem your VIP access code to instantly get a random account from stock!\n\n"
+        "🎁 `/redeem <CODE>` — Redeem your VIP access code!\n"
+        "📺 `/tv <TV_CODE>` — Auto-activate Netflix on your Smart TV using cookies!\n\n"
     )
 
     if is_authorized(update):
@@ -158,6 +149,92 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
+
+# --- ميزة التفعيل التلقائي للشاشات الذكية (Smart TV Auto-Activation) ---
+async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ **Usage Error!**\nPor favor أرسل كود التلفزيون مع الأمر:\nمثال: `/tv ABC1234`", parse_mode="Markdown")
+        return
+
+    tv_code = args[0].strip().upper()
+    status_msg = await update.message.reply_text("🔄 **جاري سحب كوكيز نتفليكس وتفعيل الشاشة تلقائياً... يرجى الانتظار ⏳**", parse_mode="Markdown")
+
+    cookie_content, cookie_name = get_random_netflix_cookie()
+    if not cookie_content:
+        await status_msg.edit_text("⚠️ **عذراً، لا يوجد كوكيز نتفليكس مخزن في الستوك حالياً!**")
+        return
+
+    try:
+        async with async_playwright() as p:
+            # تشغيل المتصفح الخفي
+            browser = await p.chromium.launch(headless=True)
+            context_browser = await browser.new_context()
+            page = await context_browser.new_page()
+
+            # 1. الانتقال لموقع نتفليكس أولاً لضبط النطاق (Domain)
+            await page.goto("https://www.netflix.com/login", timeout=60000)
+
+            # 2. حقن الكوكيز بذكاء
+            # محاولة تحويل الكوكيز إلى صيغة تدعمها Playwright أو حقن الكوكيز النصية
+            cookies_list = []
+            for line in cookie_content.splitlines():
+                if line.strip() and not line.startswith('#'):
+                    parts = line.split('\t')
+                    if len(parts) >= 7:
+                        cookies_list.append({
+                            'name': parts[5],
+                            'value': parts[6],
+                            'domain': parts[0],
+                            'path': parts[2],
+                            'secure': parts[3].upper() == 'TRUE',
+                            'httpOnly': False
+                        })
+            
+            if cookies_list:
+                await context_browser.add_cookies(cookies_list)
+
+            # 3. الذهاب إلى صفحة تفعيل الشاشات الذكية netflix.com/tv2
+            await page.goto("https://www.netflix.com/tv2", timeout=60000)
+            await page.wait_for_timeout(3000)
+
+            # 4. إدخال كود التلفزيون في الخانات المخصصة
+            # نتفليكس غالباً تستخدم حقول إدخال الكود
+            try:
+                # كتابة الكود في حقل الإدخال
+                input_locator = page.locator("input[name='code'], input#field-code, input.ui-text-input")
+                await input_locator.first.fill(tv_code)
+                
+                # الضغط على زر التفعيل (Continue / Activate)
+                submit_btn = page.locator("button[type='submit'], button.submit-button, button:has-text('Activate'), button:has-text('متابعة')")
+                await submit_btn.first.click()
+                await page.wait_for_timeout(4000)
+
+                # محاولة الضغط على زر التأكيد النهائي إن وجد (Confirm Activation)
+                confirm_btn = page.locator("button:has-text('Confirm'), button:has-text('تأكيد'), button.nf-btn-primary")
+                if await confirm_btn.count() > 0:
+                    await confirm_btn.first.click()
+                    await page.wait_for_timeout(3000)
+
+            except Exception as ex:
+                print(f"UI interaction warning: {ex}")
+
+            await browser.close()
+
+        await status_msg.edit_text(
+            f"✨ **تم إرسال كود التلفزيون بنجاح!**\n\n"
+            f"📺 **الكود المفعل:** `{tv_code}`\n"
+            f"🍪 **الملف المستخدم:** `{cookie_name}`\n\n"
+            f"✅ **تحقق من شاشة التلفزيون الآن، يجب أن يكون الحساب قد تفعيل بنجاح!** 🎉",
+            parse_mode="Markdown"
+        )
+
+    except Exception as e:
+        await status_msg.edit_text(f"❌ **حدث خطأ أثناء الاتصال بالمتصفح التلقائي:**\n`{str(e)}`", parse_mode="Markdown")
 
 async def add_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -301,18 +378,7 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ **Unsupported format:** Please upload only `.txt` or `.zip` files.")
 
     except Exception as e:
-        err_msg = str(e).lower()
-        if "too big" in err_msg or "400" in err_msg or "file is too big" in err_msg:
-            await update.message.reply_text(
-                "⚠️ **تنبيه هام جداً بخصوص حجم الملف:**\n\n"
-                "يا غالي، شركة **تيليجرام** تفرض حداً تقنياً صارماً على جميع البوتات (`20 ميجابايت كحد أقصى` لتحميل الملفات من الدردشة).\n"
-                "أي ملف حجمه أكبر من ذلك (مثل 500 ميجا)، ترفض سيرفرات تيليجرام إرساله للبوت من الأساس ولا يستطيع البوت تحميله.\n\n"
-                "💡 **الحل السريع:**\n"
-                "قم بتقسيم ملف الستوك الكبير إلى عدة ملفات صغيرة (أقل من 20 ميجا لكل ملف) ورفعها تباعاً، وسيقوم البوت بدمجها تلقائياً وبكل سهولة! 🚀",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(f"❌ Error: {e}")
+        await update.message.reply_text(f"❌ Error: {e}")
 
 async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -414,14 +480,14 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_netflix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    account = get_random_netflix()
-    if not account:
+    cookie, name = get_random_netflix_cookie()
+    if not cookie:
         await update.message.reply_text("⚠️ **Stock Empty**")
         return
-    caption = f"🎬 **NETFLIX VIP**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
+    caption = f"🎬 **NETFLIX COOKIE VIP**\n🍪 File: `{name}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
-    await update.message.reply_text(f"```{account['data']}```", parse_mode="Markdown")
+    await update.message.reply_text(f"🛡 **COOKIE DATA:**\n```{cookie}```", parse_mode="Markdown")
 
 async def get_crunchyroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -532,6 +598,8 @@ def main():
     app.add_handler(CommandHandler("kick", get_kick))
     app.add_handler(CommandHandler("g2a", get_g2a))
     
+    # أوامر الإدارة والتفعيل الذكي للشاشات
+    app.add_handler(CommandHandler("tv", activate_tv_code))
     app.add_handler(CommandHandler("addserviece", add_service))
     app.add_handler(CommandHandler("addstock", add_stock_file))
     app.add_handler(CommandHandler("addcode", add_code))
