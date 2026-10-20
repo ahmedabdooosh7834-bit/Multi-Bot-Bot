@@ -120,7 +120,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚡ **Master Controller:** `@Akk_Taiyou_Asano`\n\n"
         "🎯 **Available Commands:**\n"
         "🎁 `/redeem <CODE>` — Redeem your VIP access code!\n"
-        "📺 `/tv <TV_CODE>` — Auto-activate Netflix on your Smart TV using cookies!\n\n"
+        "📺 `/tv <TV_CODE>` — Auto-activate Netflix on your Smart TV!\n\n"
     )
 
     if is_authorized(update):
@@ -150,7 +150,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- ميزة التفعيل التلقائي للشاشات الذكية (Smart TV Auto-Activation) ---
 async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -158,7 +157,7 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ **Usage Error!**\nPor favor أرسل كود التلفزيون مع الأمر:\nمثال: `/tv ABC1234`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ **Usage Error!**\nأرسل كود التلفزيون مع الأمر:\nمثال: `/tv ABC1234`", parse_mode="Markdown")
         return
 
     tv_code = args[0].strip().upper()
@@ -171,16 +170,12 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         async with async_playwright() as p:
-            # تشغيل المتصفح الخفي
             browser = await p.chromium.launch(headless=True)
             context_browser = await browser.new_context()
             page = await context_browser.new_page()
 
-            # 1. الانتقال لموقع نتفليكس أولاً لضبط النطاق (Domain)
             await page.goto("https://www.netflix.com/login", timeout=60000)
 
-            # 2. حقن الكوكيز بذكاء
-            # محاولة تحويل الكوكيز إلى صيغة تدعمها Playwright أو حقن الكوكيز النصية
             cookies_list = []
             for line in cookie_content.splitlines():
                 if line.strip() and not line.startswith('#'):
@@ -198,23 +193,17 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if cookies_list:
                 await context_browser.add_cookies(cookies_list)
 
-            # 3. الذهاب إلى صفحة تفعيل الشاشات الذكية netflix.com/tv2
             await page.goto("https://www.netflix.com/tv2", timeout=60000)
             await page.wait_for_timeout(3000)
 
-            # 4. إدخال كود التلفزيون في الخانات المخصصة
-            # نتفليكس غالباً تستخدم حقول إدخال الكود
             try:
-                # كتابة الكود في حقل الإدخال
                 input_locator = page.locator("input[name='code'], input#field-code, input.ui-text-input")
                 await input_locator.first.fill(tv_code)
                 
-                # الضغط على زر التفعيل (Continue / Activate)
                 submit_btn = page.locator("button[type='submit'], button.submit-button, button:has-text('Activate'), button:has-text('متابعة')")
                 await submit_btn.first.click()
                 await page.wait_for_timeout(4000)
 
-                # محاولة الضغط على زر التأكيد النهائي إن وجد (Confirm Activation)
                 confirm_btn = page.locator("button:has-text('Confirm'), button:has-text('تأكيد'), button.nf-btn-primary")
                 if await confirm_btn.count() > 0:
                     await confirm_btn.first.click()
@@ -229,7 +218,7 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✨ **تم إرسال كود التلفزيون بنجاح!**\n\n"
             f"📺 **الكود المفعل:** `{tv_code}`\n"
             f"🍪 **الملف المستخدم:** `{cookie_name}`\n\n"
-            f"✅ **تحقق من شاشة التلفزيون الآن، يجب أن يكون الحساب قد تفعيل بنجاح!** 🎉",
+            f"✅ **تحقق من شاشة التلفزيون الآن!** 🎉",
             parse_mode="Markdown"
         )
 
@@ -288,6 +277,15 @@ async def check_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     report = "🔄 **Stock Cleaning & Check Report:**\n\n"
     total_valid = 0
 
+    if os.path.exists(NETFLIX_ZIP):
+        try:
+            with zipfile.ZipFile(NETFLIX_ZIP, 'r') as arch:
+                nf_count = len([f for f in arch.infolist() if not f.is_dir() and f.filename.endswith('.txt')])
+                total_valid += nf_count
+                report += f"• **Netflix (ZIP):** `{nf_count}` cookie files\n"
+        except:
+            pass
+
     for filename in os.listdir(BASE_DIR):
         if filename.endswith("_accounts.txt"):
             path = os.path.join(BASE_DIR, filename)
@@ -306,7 +304,7 @@ async def check_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-    report += f"\n📊 **Total Active Accounts:** `{total_valid}`"
+    report += f"\n📊 **Total Active Items:** `{total_valid}`"
     await update.message.reply_text(report, parse_mode="Markdown")
 
 async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -320,8 +318,6 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     platform = args[0].strip().lower()
-    target_file = os.path.join(BASE_DIR, f"{platform}_accounts.txt")
-
     message = update.message
     document = message.document or (message.reply_to_message and message.reply_to_message.document)
 
@@ -336,6 +332,15 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_file = await context.bot.get_file(document.file_id)
         await new_file.download_to_drive(file_path)
 
+        # إذا كانت المنصة نتفليكس وملف مضغوط، احفظه مباشرة كملف الكوكيز الرئيسي للبوت
+        if "net" in platform and file_name.endswith('.zip'):
+            if os.path.exists(NETFLIX_ZIP):
+                os.remove(NETFLIX_ZIP)
+            os.rename(file_path, NETFLIX_ZIP)
+            await update.message.reply_text("✅ **Success!** Netflix cookies ZIP saved successfully as `x4015_Netflix_COOKIES.zip`.", parse_mode="Markdown")
+            return
+
+        target_file = os.path.join(BASE_DIR, f"{platform}_accounts.txt")
         added_lines = 0
 
         if file_name.endswith('.zip'):
@@ -347,15 +352,14 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         content = z_f.read().decode('utf-8', errors='ignore')
                         lines = content.splitlines()
                         
-                        if platform != "netflix":
-                            with open(target_file, "a", encoding="utf-8") as out:
-                                for line in lines:
-                                    clean_line = line.strip()
-                                    if clean_line and not clean_line.startswith("#"):
-                                        if "|" not in clean_line:
-                                            clean_line = f"{clean_line}|VIP|Global|Active"
-                                        out.write(clean_line + "\n")
-                                        added_lines += 1
+                        with open(target_file, "a", encoding="utf-8") as out:
+                            for line in lines:
+                                clean_line = line.strip()
+                                if clean_line and not clean_line.startswith("#"):
+                                    if "|" not in clean_line:
+                                        clean_line = f"{clean_line}|VIP|Global|Active"
+                                    out.write(clean_line + "\n")
+                                    added_lines += 1
             os.remove(file_path)
             await update.message.reply_text(f"✅ **Success!** Added *{added_lines}* accounts to *{platform.upper()}* stock.", parse_mode="Markdown")
 
@@ -378,7 +382,15 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ **Unsupported format:** Please upload only `.txt` or `.zip` files.")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
+        err_msg = str(e).lower()
+        if "too big" in err_msg or "400" in err_msg or "file is too big" in err_msg:
+            await update.message.reply_text(
+                "⚠️ **تنبيه:** ملف كبير جداً على تيليجرام (أقصى حد 20 ميجا).\n"
+                "💡 قم بتقسيمه لملفات أصغر وارفعها تباعاً وسيتم دمجها تلقائياً.",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(f"❌ Error: {e}")
 
 async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
@@ -598,7 +610,6 @@ def main():
     app.add_handler(CommandHandler("kick", get_kick))
     app.add_handler(CommandHandler("g2a", get_g2a))
     
-    # أوامر الإدارة والتفعيل الذكي للشاشات
     app.add_handler(CommandHandler("tv", activate_tv_code))
     app.add_handler(CommandHandler("addserviece", add_service))
     app.add_handler(CommandHandler("addstock", add_stock_file))
