@@ -318,6 +318,8 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     platform = args[0].strip().lower()
+    target_file = os.path.join(BASE_DIR, f"{platform}_accounts.txt")
+
     message = update.message
     document = message.document or (message.reply_to_message and message.reply_to_message.document)
 
@@ -332,18 +334,17 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_file = await context.bot.get_file(document.file_id)
         await new_file.download_to_drive(file_path)
 
-        # إذا كانت المنصة نتفليكس وملف مضغوط، قم بحفظه مباشرة بالاسم المطلوب
+        # إذا كانت المنصة نتفليكس وملف مضغوط، احفظه بأسلوب آمن تماماً
         if "net" in platform and file_name.endswith('.zip'):
-            if os.path.exists(NETFLIX_ZIP):
-                os.remove(NETFLIX_ZIP)
             if file_path != NETFLIX_ZIP:
+                if os.path.exists(NETFLIX_ZIP):
+                    os.remove(NETFLIX_ZIP)
                 with open(file_path, 'rb') as src, open(NETFLIX_ZIP, 'wb') as dst:
                     dst.write(src.read())
                 os.remove(file_path)
             await update.message.reply_text("✅ **Success!** Netflix cookies ZIP saved successfully as `x4015_Netflix_COOKIES.zip`.", parse_mode="Markdown")
             return
 
-        target_file = os.path.join(BASE_DIR, f"{platform}_accounts.txt")
         added_lines = 0
 
         if file_name.endswith('.zip'):
