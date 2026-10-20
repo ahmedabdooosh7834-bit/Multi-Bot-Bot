@@ -526,3 +526,76 @@ def main():
 
 if __name__ == "__main__":
     main()
+# --- نظام إضافة ومعالجة الستوك المحدث ---
+import os
+from telegram import Update
+from telegram.ext import ContextTypes
+
+SUPPORTED_PLATFORMS = {
+    'netflix': 'accounts.txt',
+    'crunchyroll': 'crunchyroll_accounts.txt',
+    'hotmail': 'hotmail_accounts.txt',
+    'spotify': 'spotify_accounts.txt',
+    'steam': 'steam_accounts.txt',
+    'minecraft': 'minecraft_accounts.txt',
+    'iptv': 'iptv_accounts.txt',
+    'kick': 'kick_accounts.txt'
+}
+
+async def addstock_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "⚡ **أهلاً بك يا بطل في نظام إدارة الستوك**\n\n"
+        "الرجاء إرسال ملف الستوك بصيغة .txt وسأقوم بفرزه وتخزينه تلقائياً في القسم المخصص له بناءً على اسم الملف.",
+        parse_mode="Markdown"
+    )
+    context.user_data['waiting_for_stock'] = True
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get('waiting_for_stock'):
+        return
+
+    document = update.message.document
+    if not document:
+        await update.message.reply_text("❌ الرجاء إرسال ملف نصي .txt صالح.")
+        return
+
+    file_name = document.file_name.lower()
+    file = await context.bot.get_file(document.file_id)
+    file_path = f"temp_{file_name}"
+    await file.download_to_drive(file_path)
+
+    target_file = None
+    matched_platform = "عام"
+    
+    for platform, filename in SUPPORTED_PLATFORMS.items():
+        if platform in file_name:
+            target_file = filename
+            matched_platform = platform.capitalize()
+            break
+    
+    if not target_file:
+        target_file = "accounts.txt"
+
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            new_lines = f.readlines()
+
+        with open(target_file, 'a', encoding='utf-8') as f:
+            f.writelines(new_lines)
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        context.user_data['waiting_for_stock'] = False
+        
+        await update.message.reply_text(
+            f"✅ **تم إضافة الستوك بنجاح!**\n\n"
+            f"📌 **المنصة:** {matched_platform}\n"
+            f"📊 **عدد الأسطر المضافة:** {len(new_lines)}\n"
+            f"📁 **تم الحفظ في:** {target_file}",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ حدث خطأ أثناء معالجة الملف: {str(e)}")
+        if os.path.exists(file_path):
+            os.remove(file_path)
