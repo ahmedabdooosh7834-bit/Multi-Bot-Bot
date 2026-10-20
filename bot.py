@@ -2,9 +2,8 @@
 import re
 import random
 import zipfile
-import asyncio
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from flask import Flask
 from colorama import init, Fore, Style
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -30,14 +29,16 @@ USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
 
-# --- خادم الويب الآمن لإرضاء فحص منصة Railway ---
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot and Web Server are active and running!")
-    def log_message(self, format, *args):
-        pass
+# --- خادم الويب المستقر باستخدام Flask لإرضاء منصة Railway ---
+app_flask = Flask(__name__)
+
+@app_flask.route('/')
+def health_check():
+    return "Bot is alive and running!", 200
+
+def run_flask_server():
+    port = int(os.environ.get("PORT", 8080))
+    app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 def is_authorized(update: Update) -> bool:
     user = update.effective_user
@@ -723,21 +724,10 @@ def main():
     # تشغيل بوت تيليجرام في خيط منفصل
     threading.Thread(target=run_telegram_bot, daemon=True).start()
 
-    # تشغيل خادم الويب مع حماية كاملة لقراءة بورت Railway
-    port = 8080
-    try:
-        port_env = os.environ.get("PORT")
-        if port_env:
-            port = int(port_env)
-    except Exception:
-        port = 8080
-
-    try:
-        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-        print(f"Health Check Web Server running on port {port}...")
-        server.serve_forever()
-    except Exception as e:
-        print(f"Web server error: {e}")
+    # تشغيل خادم Flask على العملية الرئيسية لضمان الاستجابة الفورية لبورت Railway
+    port = int(os.environ.get("PORT", 8080))
+    print(f"Flask Web Server running on port {port}...")
+    app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     main()
