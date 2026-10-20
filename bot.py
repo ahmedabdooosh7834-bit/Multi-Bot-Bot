@@ -4,13 +4,13 @@ import shutil
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = ""
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "⚡ **أهلاً بك في بوت إدارة الستوك النظيف!**\n\n"
-        "• لإضافة ستوك: ارفع الملف ورد عليه بـ /addstock\n"
-        "• لفحص وتنقية الستوك: استخدم /check",
+        "⚡ **Welcome to the Stock Management Bot!**\n\n"
+        "• To add stock: Upload a file and reply to it with /addstock\n"
+        "• To check and clean stock: Use /check",
         parse_mode="Markdown"
     )
 
@@ -22,7 +22,7 @@ async def addstock_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         document = message.reply_to_message.document
 
     if not document:
-        await message.reply_text("⚠️ **الرجاء إرفاق ملف الستوك أو الرد على الملف بـ /addstock**", parse_mode="Markdown")
+        await message.reply_text("⚠️ **Please attach a stock file or reply to a file with /addstock!**", parse_mode="Markdown")
         return
 
     file_name = document.file_name.lower()
@@ -51,7 +51,7 @@ async def addstock_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if os.path.exists("temp_extracted"):
                 shutil.rmtree("temp_extracted")
                 
-            await message.reply_text(f"✅ **تم إضافة واستخراج الستوك بنجاح!**\n📊 الإجمالي: {total_added} حساب في {target_file}", parse_mode="Markdown")
+            await message.reply_text(f"✅ **Stock extracted and added successfully!**\n📊 Total added: {total_added} accounts to {target_file}", parse_mode="Markdown")
         else:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 new_lines = f.readlines()
@@ -59,23 +59,23 @@ async def addstock_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with open(target_file, 'a', encoding='utf-8') as f:
                 f.writelines(new_lines)
 
-            await message.reply_text(f"✅ **تم إضافة الستوك بنجاح!**\n📊 عدد الحسابات: {len(new_lines)}\n📁 الملف: {target_file}", parse_mode="Markdown")
+            await message.reply_text(f"✅ **Stock added successfully!**\n📊 Accounts added: {len(new_lines)}\n📁 File: {target_file}", parse_mode="Markdown")
 
         if os.path.exists(file_path):
             os.remove(file_path)
 
     except Exception as e:
-        await message.reply_text(f"❌ حدث خطأ أثناء المعالجة: {str(e)}")
+        await message.reply_text(f"❌ An error occurred during processing: {str(e)}")
         if os.path.exists(file_path):
             os.remove(file_path)
 
 async def check_accounts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
-    await message.reply_text("🔄 **جاري فحص الحسابات المخزنة وتنقية التالف منها... يرجى الانتظار.**", parse_mode="Markdown")
+    await message.reply_text("🔄 **Checking stored accounts and cleaning invalid ones... Please wait.**", parse_mode="Markdown")
 
     target_file = "crunchyroll_accounts.txt"
     if not os.path.exists(target_file):
-        await message.reply_text("⚠️ عذراً، لا يوجد ملف ستوك مخزن حالياً لفحصه.")
+        await message.reply_text("⚠️ Sorry, no stock file is currently stored for checking.")
         return
 
     valid_accounts = []
@@ -96,13 +96,13 @@ async def check_accounts_command(update: Update, context: ContextTypes.DEFAULT_T
             f.writelines(valid_accounts)
 
         await message.reply_text(
-            f"✨ **تم الانتهاء من الفحص بنجاح!**\n\n"
-            f"🟢 **الحسابات الصالحة:** {len(valid_accounts)}\n"
-            f"🔴 **الحسابات المعطوبة المزالة:** {invalid_count}",
+            f"✨ **Check completed successfully!**\n\n"
+            f"🟢 **Valid accounts:** {len(valid_accounts)}\n"
+            f"🔴 **Removed invalid accounts:** {invalid_count}",
             parse_mode="Markdown"
         )
     except Exception as e:
-        await message.reply_text(f"❌ حدث خطأ أثناء الفحص: {str(e)}")
+        await message.reply_text(f"❌ An error occurred during checking: {str(e)}")
 
 def main():
     if not BOT_TOKEN:
