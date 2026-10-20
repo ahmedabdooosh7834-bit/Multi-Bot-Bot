@@ -600,3 +600,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path):
             os.remove(file_path)
 
+
+from telegram.ext import CommandHandler
+
+def setup_check_handler(application):
+    application.add_handler(CommandHandler("check", check_accounts_command))
