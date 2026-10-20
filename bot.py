@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import random
 import zipfile
@@ -599,3 +599,4 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ حدث خطأ أثناء معالجة الملف: {str(e)}")
         if os.path.exists(file_path):
             os.remove(file_path)
+
