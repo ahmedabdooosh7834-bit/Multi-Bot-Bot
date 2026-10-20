@@ -13,7 +13,6 @@ init(autoreset=True)
 TOKEN = "7946580929:AAFQoVnSU7JxOMx_Gu0ClRwcd7bO3nUDK5I"
 ALLOWED_USERNAME = "Akk_Taiyou_Asano"
 
-# بيانات الـ VPS الخاصة بك
 VPS_HOST = "34.122.24.8"
 VPS_PORT = 55267
 VPS_USER = "sftp_live_xdP8t"
@@ -155,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- تفعيل الشاشة الذكية عبر الاتصال بالـ VPS ---
+# --- تفعيل الشاشة الذكية عبر رفع الكوكيز بأمان للـ VPS ---
 async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -167,7 +166,7 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tv_code = args[0].strip().upper()
-    status_msg = await update.message.reply_text("🔄 **جاري الاتصال بالـ VPS وسحب كوكيز نتفليكس لتفعيل الشاشة... ⏳**", parse_mode="Markdown")
+    status_msg = await update.message.reply_text("🔄 **جاري الاتصال بالـ VPS ورفع الكوكيز لتفعيل الشاشة... ⏳**", parse_mode="Markdown")
 
     cookie_content, cookie_name = get_random_netflix_cookie()
     if not cookie_content:
@@ -175,18 +174,86 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # إرسال الكود والكوكيز للـ VPS لتنفيذ Playwright عبر SSH
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(VPS_HOST, port=VPS_PORT, username=VPS_USER, password=VPS_PASS, timeout=15)
 
-        # حفظ الكوكيز مؤقتاً على الـ VPS وتشغيل السكربت
-        escaped_cookie = cookie_content.replace('"', '\\"')
-        cmd = f'python3 -c "import asyncio; from tv_runner import activate; asyncio.run(activate(\'{tv_code}\', \'\'{escaped_cookie}\'\'))"'
-        
-        stdin, stdout, stderr = ssh.exec_command(cmd, timeout=90)
+        sftp = ssh.open_sftp()
+
+        # إنشاء ملف التشغيل تلقائياً على الـ VPS إذا لم يكن موجوداً
+        runner_code = '''import sys
+import asyncio
+from playwright.async_api import async_playwright
+
+async def activate(tv_code, cookie_file_path):
+    try:
+        with open(cookie_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            cookie_content = f.read()
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+
+            await page.goto("https://www.netflix.com/login", timeout=60000)
+
+            cookies_list = []
+            for line in cookie_content.splitlines():
+                if line.strip() and not line.startswith('#'):
+                    parts = line.split('\\t')
+                    if len(parts) >= 7:
+                        cookies_list.append({
+                            'name': parts[5],
+                            'value': parts[6],
+                            'domain': parts[0],
+                            'path': parts[2],
+                            'secure': parts[3].upper() == 'TRUE',
+                            'httpOnly': False
+                        })
+            
+            if cookies_list:
+                await context.add_cookies(cookies_list)
+
+            await page.goto("https://www.netflix.com/tv2", timeout=60000)
+            await page.wait_for_timeout(3000)
+
+            input_locator = page.locator("input[name='code'], input#field-code, input.ui-text-input")
+            await input_locator.first.fill(tv_code)
+            
+            submit_btn = page.locator("button[type='submit'], button.submit-button, button:has-text('Activate'), button:has-text('متابعة')")
+            await submit_btn.first.click()
+            await page.wait_for_timeout(4000)
+
+            confirm_btn = page.locator("button:has-text('Confirm'), button:has-text('تأكيد'), button.nf-btn-primary")
+            if await confirm_btn.count() > 0:
+                await confirm_btn.first.click()
+                await page.wait_for_timeout(3000)
+
+            await browser.close()
+            print("SUCCESS")
+    except Exception as e:
+        print(f"ERROR: {e}")
+
+if __name__ == "__main__":
+    code = sys.argv[1]
+    c_file = sys.argv[2]
+    asyncio.run(activate(code, c_file))
+'''
+        with sftp.file('tv_runner.py', 'w') as f:
+            f.write(runner_code)
+
+        # رفع الكوكيز في ملف نصي مؤقت على الـ VPS لمنع أي أخطاء في الـ Syntax
+        with sftp.file('/tmp/temp_cookie.txt', 'w') as f:
+            f.write(cookie_content)
+        sftp.close()
+
+        # تنفيذ السكربت على الـ VPS
+        stdin, stdout, stderr = ssh.exec_command(f'python3 tv_runner.py {tv_code} /tmp/temp_cookie.txt', timeout=90)
         output = stdout.read().decode()
         error = stderr.read().decode()
+
+        # تنظيف الملف المؤقت
+        ssh.exec_command('rm -f /tmp/temp_cookie.txt')
         ssh.close()
 
         if "SUCCESS" in output:
