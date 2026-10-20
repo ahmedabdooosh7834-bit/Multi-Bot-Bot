@@ -13,10 +13,11 @@ init(autoreset=True)
 TOKEN = "7946580929:AAFQoVnSU7JxOMx_Gu0ClRwcd7bO3nUDK5I"
 ALLOWED_USERNAME = "Akk_Taiyou_Asano"
 
-VPS_HOST = "34.122.24.8"
-VPS_PORT = 55267
-VPS_USER = "sftp_live_xdP8t"
-VPS_PASS = "whng1aPRxtCLQi8KRgPZazgBzsa9xqJ6LW"
+# بيانات الـ VPS الجديد (Root Access)
+VPS_HOST = "149.129.255.179"
+VPS_PORT = 22
+VPS_USER = "adminDJ"
+VPS_PASS = "Gajebo108"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 NETFLIX_ZIP = os.path.join(BASE_DIR, "x4015_Netflix_COOKIES.zip")
@@ -124,7 +125,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚡ **Master Controller:** `@Akk_Taiyou_Asano`\n\n"
         "🎯 **Available Commands:**\n"
         "🎁 `/redeem <CODE>` — Redeem your VIP access code!\n"
-        "📺 `/tv <TV_CODE>` — Auto-activate Netflix on your Smart TV via VPS!\n\n"
+        "📺 `/tv <TV_CODE>` — Auto-activate Netflix on your Smart TV via Root VPS (with Screenshot)!\n\n"
     )
 
     if is_authorized(update):
@@ -154,7 +155,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- تفعيل الشاشة الذكية عبر رفع الكوكيز بأمان للـ VPS ---
+# --- تفعيل الشاشة الذكية عبر الـ VPS وتجهيز البيئة تلقائياً ---
 async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
@@ -166,7 +167,7 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tv_code = args[0].strip().upper()
-    status_msg = await update.message.reply_text("🔄 **جاري الاتصال بالـ VPS ورفع الكوكيز لتفعيل الشاشة... ⏳**", parse_mode="Markdown")
+    status_msg = await update.message.reply_text("🔄 **جاري الاتصال بالـ VPS وتجهيز المتصفح وتفعيل الشاشة... ⏳**", parse_mode="Markdown")
 
     cookie_content, cookie_name = get_random_netflix_cookie()
     if not cookie_content:
@@ -180,12 +181,13 @@ async def activate_tv_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         sftp = ssh.open_sftp()
 
-        # إنشاء ملف التشغيل تلقائياً على الـ VPS إذا لم يكن موجوداً
+        # سكربت بايثون على الـ VPS
         runner_code = '''import sys
 import asyncio
 from playwright.async_api import async_playwright
 
 async def activate(tv_code, cookie_file_path):
+    browser = None
     try:
         with open(cookie_file_path, 'r', encoding='utf-8', errors='ignore') as f:
             cookie_content = f.read()
@@ -229,9 +231,17 @@ async def activate(tv_code, cookie_file_path):
                 await confirm_btn.first.click()
                 await page.wait_for_timeout(3000)
 
+            await page.screenshot(path="screenshot.png", full_page=True)
             await browser.close()
             print("SUCCESS")
     except Exception as e:
+        try:
+            if 'page' in locals():
+                await page.screenshot(path="screenshot.png", full_page=True)
+            if browser:
+                await browser.close()
+        except:
+            pass
         print(f"ERROR: {e}")
 
 if __name__ == "__main__":
@@ -242,30 +252,48 @@ if __name__ == "__main__":
         with sftp.file('tv_runner.py', 'w') as f:
             f.write(runner_code)
 
-        # رفع الكوكيز في ملف نصي مؤقت على الـ VPS لمنع أي أخطاء في الـ Syntax
         with sftp.file('/tmp/temp_cookie.txt', 'w') as f:
             f.write(cookie_content)
         sftp.close()
 
-        # تنفيذ السكربت على الـ VPS
-        stdin, stdout, stderr = ssh.exec_command(f'python3 tv_runner.py {tv_code} /tmp/temp_cookie.txt', timeout=90)
+        # التأكد من تثبيت مكتبة Playwright ومتطلباتها على الـ VPS تلقائياً
+        ssh.exec_command('pip3 install playwright && playwright install chromium --with-deps', get_pty=True)
+
+        # تنفيذ السكربت وجلب النتيجة
+        stdin, stdout, stderr = ssh.exec_command(f'python3 tv_runner.py {tv_code} /tmp/temp_cookie.txt', get_pty=True, timeout=90)
         output = stdout.read().decode()
         error = stderr.read().decode()
 
-        # تنظيف الملف المؤقت
-        ssh.exec_command('rm -f /tmp/temp_cookie.txt')
+        # تحميل لقطة الشاشة (Screenshot)
+        local_screenshot = os.path.join(BASE_DIR, "vps_screenshot.png")
+        try:
+            sftp = ssh.open_sftp()
+            sftp.get('screenshot.png', local_screenshot)
+            sftp.close()
+        except Exception as ex:
+            print(f"Screenshot download warning: {ex}")
+
+        ssh.exec_command('rm -f /tmp/temp_cookie.txt screenshot.png')
         ssh.close()
 
         if "SUCCESS" in output:
-            await status_msg.edit_text(
+            caption = (
                 f"✨ **تم تفعيل شاشة التلفزيون عبر الـ VPS بنجاح!**\n\n"
                 f"📺 **الكود المفعل:** `{tv_code}`\n"
                 f"🍪 **الملف المستخدم:** `{cookie_name}`\n\n"
-                f"✅ **تحقق من شاشة التلفزيون الآن!** 🎉",
-                parse_mode="Markdown"
+                f"✅ **تحقق من شاشة التلفزيون الآن!** 🎉"
             )
         else:
-            await status_msg.edit_text(f"❌ **فشل التفعيل في الـ VPS:**\n`{output or error}`", parse_mode="Markdown")
+            caption = f"❌ **نتيجة التفعيل (مع وجود ملاحظة/خطأ):**\n`{output or error}`"
+
+        await status_msg.delete()
+
+        if os.path.exists(local_screenshot):
+            with open(local_screenshot, 'rb') as photo_file:
+                await update.message.reply_photo(photo=photo_file, caption=caption, parse_mode="Markdown")
+            os.remove(local_screenshot)
+        else:
+            await update.message.reply_text(caption, parse_mode="Markdown")
 
     except Exception as e:
         await status_msg.edit_text(f"❌ **خطأ في الاتصال بالـ VPS:**\n`{str(e)}`", parse_mode="Markdown")
