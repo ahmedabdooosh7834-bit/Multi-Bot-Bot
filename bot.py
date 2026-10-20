@@ -2,6 +2,8 @@
 import re
 import random
 import zipfile
+import threading
+from flask import Flask
 from colorama import init, Fore, Style
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -26,6 +28,13 @@ G2A_FILE = os.path.join(BASE_DIR, "g2a_accounts.txt")
 CODES_FILE = os.path.join(BASE_DIR, "codes_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
+
+# --- خادم الويب الأساسي لمنصة Railway ---
+app_flask = Flask(__name__)
+
+@app_flask.route('/')
+def health_check():
+    return "Bot and Web Server are active and running 24/7!", 200
 
 def is_authorized(update: Update) -> bool:
     user = update.effective_user
@@ -483,16 +492,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-def main():
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
-    print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
-    print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
-    print(Fore.GREEN + Style.BRIGHT + " [🚀] Bot is online and ready for action...\n")
-    print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
-
+# --- دالة تشغيل بوت تيليجرام مع خادم Flask في الخلفية لضمان عدم حدوث CRASHED ---
+def run_telegram_bot():
     request_settings = HTTPXRequest(read_timeout=30.0, write_timeout=30.0, connect_timeout=30.0, pool_timeout=30.0)
-
     app = Application.builder().token(TOKEN).request(request_settings).build()
     
     app.add_handler(CommandHandler("start", start))
@@ -515,6 +517,21 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     app.run_polling()
+
+def main():
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
+    print(Fore.YELLOW + "    🎁 ULTIMATE G2A & AUTO-STOCK BOT - RUNNING 🎁")
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65)
+    print(Fore.CYAN + f" [🛡] Security Shield Active: Locked exclusively to @{ALLOWED_USERNAME}")
+    print(Fore.GREEN + Style.BRIGHT + " [🚀] Bot is online and ready for action...\n")
+    print(Fore.MAGENTA + Style.BRIGHT + "="*65 + Style.RESET_ALL)
+
+    # تشغيل بوت تيليجرام في الخلفية
+    threading.Thread(target=run_telegram_bot, daemon=True).start()
+
+    # تشغيل خادم Flask الأساسي على العملية الرئيسية لكي ترضي منصة Railway ولا يحدث CRASHED أبداً
+    port = int(os.environ.get("PORT", 8080))
+    app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     main()
