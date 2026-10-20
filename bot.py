@@ -115,23 +115,10 @@ def fetch_account_by_platform(platform_name):
     p = platform_name.lower()
     if "net" in p:
         return get_random_netflix()
-    elif "crunchy" in p:
-        return get_random_text_account(CRUNCHYROLL_FILE, "Crunchyroll")
-    elif "mine" in p:
-        return get_random_text_account(MINECRAFT_FILE, "Minecraft")
-    elif "iptv" in p:
-        return get_random_text_account(IPTV_FILE, "IPTV")
-    elif "hot" in p:
-        return get_random_text_account(HOTMAIL_FILE, "Hotmail")
-    elif "steam" in p:
-        return get_random_text_account(STEAM_FILE, "Steam")
-    elif "spotify" in p:
-        return get_random_text_account(SPOTIFY_FILE, "Spotify")
-    elif "kick" in p:
-        return get_random_text_account(KICK_FILE, "Kick")
-    elif "g2a" in p:
-        return get_random_text_account(G2A_FILE, "G2A")
     else:
+        file_path = os.path.join(BASE_DIR, f"{p}_accounts.txt")
+        if os.path.exists(file_path):
+            return get_random_text_account(file_path, p.capitalize())
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -147,12 +134,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_authorized(update):
         welcome_text += (
-            "👑 **Admin Commands (Stock Gen):**\n"
+            "👑 **Admin Commands:**\n"
             "🍿 `/netflix`  |  🌸 `/crunchyroll`  |  ⛏️ `/minecraft`\n"
             "📺 `/iptv`     |  📧 `/hotmail`     |  🎮 `/steam`\n"
             "🎧 `/spotify`  |  🟣 `/kick`        |  🛒 `/g2a`\n\n"
-            "📥 `/addstock <platform>` — Send a .txt or .zip file with this command to auto-sort & add stock!\n"
-            "➕ `/addcode <code> <platform>` — Link a code to stock\n"
+            "➕ `/addserviece <name>` — Create a new service\n"
+            "📥 `/addstock <platform>` — Add stock files\n"
+            "➕ `/addcode <code> <platform>` — Link a code\n"
             "🔄 `/check` — Clean & validate stock databases\n"
         )
     
@@ -171,41 +159,77 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+# --- إضافة خدمة جديدة ديناميكياً ---
+async def add_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ **Usage Error!**\nFormat: `/addserviece <service_name>`", parse_mode="Markdown")
+        return
+
+    service_name = args[0].strip().lower()
+    file_path = os.path.join(BASE_DIR, f"{service_name}_accounts.txt")
+
+    if os.path.exists(file_path):
+        await update.message.reply_text(f"⚠️ Service `{service_name}` already exists!")
+        return
+
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(f"# Accounts database for {service_name}\n")
+
+        # تسجيل الأمر ديناميكياً
+        context.application.add_handler(CommandHandler(service_name, get_dynamic_service))
+
+        await update.message.reply_text(
+            f"✅ **Success!** Service `{service_name}` created successfully.\n"
+            f"• Command `/{service_name}` is now active.\n"
+            f"• Use `/addstock {service_name}` to upload accounts.",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
+
+async def get_dynamic_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    command = update.message.text.lstrip('/').lower().split()[0]
+    file_path = os.path.join(BASE_DIR, f"{command}_accounts.txt")
+    account = get_random_text_account(file_path, command.capitalize())
+    if not account:
+        await update.message.reply_text(f"⚠️ **Stock Empty** for {command.capitalize()}")
+        return
+    caption = f"🛒 **{command.upper()} VIP ACCOUNT**\n👤 `{account['email']}`\n🔑 `{account['password']}`"
+    keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
+    await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
 async def check_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
         await update.message.reply_text("⛔ **Access Denied:** Master privilege required.")
         return
 
-    files = {
-        "Crunchyroll": CRUNCHYROLL_FILE,
-        "Minecraft": MINECRAFT_FILE,
-        "Hotmail": HOTMAIL_FILE,
-        "IPTV": IPTV_FILE,
-        "Steam": STEAM_FILE,
-        "Spotify": SPOTIFY_FILE,
-        "Kick": KICK_FILE,
-        "G2A": G2A_FILE
-    }
-
     report = "🔄 **Stock Cleaning & Check Report:**\n\n"
     total_valid = 0
 
-    for name, path in files.items():
-        if not os.path.exists(path):
-            continue
-        valid_lines = []
-        try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    clean = line.strip()
-                    if clean and not clean.startswith("#") and len(clean) > 3:
-                        valid_lines.append(clean + "\n")
-            with open(path, "w", encoding="utf-8") as f:
-                f.writelines(valid_lines)
-            total_valid += len(valid_lines)
-            report += f"• **{name}:** `{len(valid_lines)}` valid accounts\n"
-        except Exception:
-            pass
+    for filename in os.listdir(BASE_DIR):
+        if filename.endswith("_accounts.txt"):
+            path = os.path.join(BASE_DIR, filename)
+            name = filename.replace("_accounts.txt", "").capitalize()
+            valid_lines = []
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        clean = line.strip()
+                        if clean and not clean.startswith("#") and len(clean) > 3:
+                            valid_lines.append(clean + "\n")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.writelines(valid_lines)
+                total_valid += len(valid_lines)
+                report += f"• **{name}:** `{len(valid_lines)}` valid accounts\n"
+            except Exception:
+                pass
 
     report += f"\n📊 **Total Active Accounts:** `{total_valid}`"
     await update.message.reply_text(report, parse_mode="Markdown")
@@ -221,11 +245,7 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     platform = args[0].strip().lower()
-    valid_platforms = ["netflix", "crunchyroll", "minecraft", "iptv", "hotmail", "steam", "spotify", "kick", "g2a"]
-    
-    if platform not in valid_platforms:
-        await update.message.reply_text(f"⚠️ **Invalid Platform!** Choose from: {', '.join(valid_platforms)}")
-        return
+    target_file = os.path.join(BASE_DIR, f"{platform}_accounts.txt")
 
     message = update.message
     document = message.document or (message.reply_to_message and message.reply_to_message.document)
@@ -241,17 +261,6 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_file = await context.bot.get_file(document.file_id)
         await new_file.download_to_drive(file_path)
 
-        target_file_map = {
-            "crunchyroll": CRUNCHYROLL_FILE,
-            "minecraft": MINECRAFT_FILE,
-            "hotmail": HOTMAIL_FILE,
-            "iptv": IPTV_FILE,
-            "steam": STEAM_FILE,
-            "spotify": SPOTIFY_FILE,
-            "kick": KICK_FILE,
-            "g2a": G2A_FILE
-        }
-
         added_lines = 0
 
         if file_name.endswith('.zip'):
@@ -264,33 +273,29 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         lines = content.splitlines()
                         
                         if platform != "netflix":
-                            target_file = target_file_map.get(platform)
-                            if target_file:
-                                with open(target_file, "a", encoding="utf-8") as out:
-                                    for line in lines:
-                                        clean_line = line.strip()
-                                        if clean_line and not clean_line.startswith("#"):
-                                            if "|" not in clean_line:
-                                                clean_line = f"{clean_line}|VIP|Global|Active"
-                                            out.write(clean_line + "\n")
-                                            added_lines += 1
+                            with open(target_file, "a", encoding="utf-8") as out:
+                                for line in lines:
+                                    clean_line = line.strip()
+                                    if clean_line and not clean_line.startswith("#"):
+                                        if "|" not in clean_line:
+                                            clean_line = f"{clean_line}|VIP|Global|Active"
+                                        out.write(clean_line + "\n")
+                                        added_lines += 1
             os.remove(file_path)
             await update.message.reply_text(f"✅ **Success!** Added *{added_lines}* accounts to *{platform.upper()}* stock.", parse_mode="Markdown")
 
         elif file_name.endswith('.txt'):
-            target_file = target_file_map.get(platform)
-            if target_file:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as src:
-                    lines = src.readlines()
-                
-                with open(target_file, "a", encoding="utf-8") as out:
-                    for line in lines:
-                        clean_line = line.strip()
-                        if clean_line and not clean_line.startswith("#"):
-                            if "|" not in clean_line:
-                                clean_line = f"{clean_line}|VIP|Global|Active"
-                            out.write(clean_line + "\n")
-                            added_lines += 1
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as src:
+                lines = src.readlines()
+            
+            with open(target_file, "a", encoding="utf-8") as out:
+                for line in lines:
+                    clean_line = line.strip()
+                    if clean_line and not clean_line.startswith("#"):
+                        if "|" not in clean_line:
+                            clean_line = f"{clean_line}|VIP|Global|Active"
+                        out.write(clean_line + "\n")
+                        added_lines += 1
             os.remove(file_path)
             await update.message.reply_text(f"✅ **Success!** Added *{added_lines}* accounts to *{platform.upper()}* stock.", parse_mode="Markdown")
         else:
@@ -313,11 +318,6 @@ async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = args[0].strip()
     platform = args[1].strip().lower()
 
-    valid_platforms = ["netflix", "crunchyroll", "minecraft", "iptv", "hotmail", "steam", "spotify", "kick", "g2a"]
-    if platform not in valid_platforms:
-        await update.message.reply_text(f"⚠️ **Invalid Platform!**")
-        return
-
     try:
         if os.path.exists(CODES_FILE):
             with open(CODES_FILE, "r", encoding="utf-8") as f:
@@ -335,9 +335,6 @@ async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    username_str = f"@{user.username}" if user.username else user.first_name
-    user_id = user.id
-
     args = context.args
     if not args:
         await update.message.reply_text("⚠️ **Please provide a code!**\nUsage: `/redeem <code>`", parse_mode="Markdown")
@@ -526,12 +523,20 @@ def main():
     app.add_handler(CommandHandler("kick", get_kick))
     app.add_handler(CommandHandler("g2a", get_g2a))
     
+    # تحميل الأوامر الأساسية والأدوات
+    app.add_handler(CommandHandler("addserviece", add_service))
     app.add_handler(CommandHandler("addstock", add_stock_file))
     app.add_handler(CommandHandler("addcode", add_code))
     app.add_handler(CommandHandler("redeem", redeem_code))
     app.add_handler(CommandHandler("reedem", redeem_code))
-    
     app.add_handler(CommandHandler("check", check_stock))
+
+    # تحميل أي خدمات إضافية تم إنشاؤها مسبقاً ديناميكياً
+    for filename in os.listdir(BASE_DIR):
+        if filename.endswith("_accounts.txt"):
+            serv_name = filename.replace("_accounts.txt", "").lower()
+            if serv_name not in ["crunchyroll", "minecraft", "hotmail", "iptv", "steam", "spotify", "kick", "g2a"]:
+                app.add_handler(CommandHandler(serv_name, get_dynamic_service))
 
     app.add_handler(MessageHandler(filters.ANIMATION, get_file_id))
     app.add_handler(CallbackQueryHandler(button_handler))
