@@ -605,3 +605,4 @@ from telegram.ext import CommandHandler
 
 def setup_check_handler(application):
     application.add_handler(CommandHandler("check", check_accounts_command))
+
