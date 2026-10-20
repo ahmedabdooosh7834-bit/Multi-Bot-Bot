@@ -26,6 +26,7 @@ SPOTIFY_FILE = os.path.join(BASE_DIR, "spotify_accounts.txt")
 KICK_FILE = os.path.join(BASE_DIR, "kick_accounts.txt")
 G2A_FILE = os.path.join(BASE_DIR, "g2a_accounts.txt")
 CODES_FILE = os.path.join(BASE_DIR, "codes_db.txt")
+USERS_FILE = os.path.join(BASE_DIR, "users_db.txt")
 
 EPIC_GIF_ID = "CgACAgQAAxkBAAID8GrWUp6oFYRL0wXnz84eY-dpMu9uAAItIAACYEq5Unt0oPSbvFyUPQQ"
 
@@ -42,10 +43,22 @@ def is_authorized(update: Update) -> bool:
         return user.username.lower() == ALLOWED_USERNAME.lower()
     return False
 
+def save_user(user_id):
+    try:
+        users = set()
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                users = set(line.strip() for line in f if line.strip())
+        if str(user_id) not in users:
+            with open(USERS_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{user_id}\n")
+    except Exception:
+        pass
+
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.animation:
         file_id = update.message.animation.file_id
-        await update.message.reply_text(f"✨ **GIF File ID:**\n{file_id}", parse_mode="Markdown")
+        await update.message.reply_text(f"✨ **GIF File ID:**\n`{file_id}`", parse_mode="Markdown")
 
 def get_random_netflix():
     if not os.path.exists(NETFLIX_ZIP):
@@ -75,7 +88,7 @@ def get_random_netflix():
                 "login": "https://www.netflix.com/login"
             }
     except Exception as e:
-        print(f"{Fore.RED}[!] Netflix Error: {e}")
+        print(f"Netflix Error: {e}")
         return None
 
 def get_random_text_account(file_path, platform_name):
@@ -118,7 +131,7 @@ def get_random_text_account(file_path, platform_name):
             "login": login_urls.get(platform_name, "https://www.g2a.com/")
         }
     except Exception as e:
-        print(f"{Fore.RED}[!] Error reading {platform_name}: {e}")
+        print(f"Error reading {platform_name}: {e}")
         return None
 
 def fetch_account_by_platform(platform_name):
@@ -145,24 +158,28 @@ def fetch_account_by_platform(platform_name):
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user:
+        save_user(user.id)
+
     welcome_text = (
         "✨ ════════════════════════════ ✨\n"
         "🔥 **WELCOME TO THE ULTIMATE VIP VAULT** 🔥\n"
         "✨ ════════════════════════════ ✨\n\n"
-        "🛡 **System Status:** Online & Secured\n"
-        "⚡ **Master Controller:** @Akk_Taiyou_Asano\n\n"
+        "🛡 **System Status:** `Online & Secured`\n"
+        "⚡ **Master Controller:** `@Akk_Taiyou_Asano`\n\n"
         "🎯 **Available Commands:**\n"
-        "🎁 /redeem <CODE> — Redeem your VIP access code to instantly get a random account from stock!\n\n"
+        "🎁 `/redeem <CODE>` — Redeem your VIP access code to instantly get a random account from stock!\n\n"
     )
 
     if is_authorized(update):
         welcome_text += (
             "👑 **Admin Commands (Stock Gen):**\n"
-            "🍿 /netflix  |  🌸 /crunchyroll  |  ⛏️ /minecraft\n"
-            "📺 /iptv     |  📧 /hotmail     |  🎮 /steam\n"
-            "🎧 /spotify  |  🟣 /kick        |  🛒 /g2a\n\n"
-            "📥 /addstock <platform> — Send a .txt or .zip file with this command to auto-sort & add stock!\n"
-            "➕ /addcode <code> <platform> — Link a code to stock\n"
+            "🍿 `/netflix`  |  🌸 `/crunchyroll`  |  ⛏️ `/minecraft`\n"
+            "📺 `/iptv`     |  📧 `/hotmail`     |  🎮 `/steam`\n"
+            "🎧 `/spotify`  |  🟣 `/kick`        |  🛒 `/g2a`\n\n"
+            "📥 `/addstock <platform>` — Send a .txt or .zip file with this command to auto-sort & add stock!\n"
+            "➕ `/addcode <code> <platform>` — Link a code to stock\n"
         )
     
     welcome_text += "✨ ════════════════════════════ ✨"
@@ -187,8 +204,7 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ **Usage Error!**\nSend a .txt or .zip file with the command: /addstock <platform>\nPlatforms: 
-etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ **Usage Error!**\nSend a `.txt` or `.zip` file with the command: `/addstock <platform>`\nPlatforms: `netflix`, `crunchyroll`, `minecraft`, `iptv`, `hotmail`, `steam`, `spotify`, `kick`, `g2a`", parse_mode="Markdown")
         return
 
     platform = args[0].strip().lower()
@@ -202,7 +218,7 @@ etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse
     document = message.document or (message.reply_to_message and message.reply_to_message.document)
 
     if not document:
-        await update.message.reply_text("⚠️ **Please attach a file (.txt or .zip)** or reply to a file with /addstock <platform>")
+        await update.message.reply_text("⚠️ **Please attach a file (.txt or .zip)** or reply to a file with `/addstock <platform>`")
         return
 
     file_name = document.file_name.lower()
@@ -268,7 +284,7 @@ etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse
             await update.message.reply_text(f"✅ **Success!** Added *{added_lines}* organized accounts to *{platform.upper()}* stock.", parse_mode="Markdown")
         else:
             os.remove(file_path)
-            await update.message.reply_text("❌ **Unsupported format:** Please upload only .txt or .zip files.")
+            await update.message.reply_text("❌ **Unsupported format:** Please upload only `.txt` or `.zip` files.")
 
     except Exception as e:
         await update.message.reply_text(f"❌ Error processing stock file: {e}")
@@ -280,8 +296,7 @@ async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args
     if len(args) < 2:
-        await update.message.reply_text("⚠️ **Usage Error!**\nFormat: /addcode <code> <platform>\nPlatforms: 
-etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ **Usage Error!**\nFormat: `/addcode <code> <platform>`\nPlatforms: `netflix`, `crunchyroll`, `minecraft`, `iptv`, `hotmail`, `steam`, `spotify`, `kick`, `g2a`", parse_mode="Markdown")
         return
 
     code = args[0].strip()
@@ -303,7 +318,7 @@ etflix, crunchyroll, minecraft, iptv, hotmail, steam, spotify, kick, g2a", parse
         with open(CODES_FILE, "a", encoding="utf-8") as f:
             f.write(f"{code}|{platform}|active\n")
 
-        await update.message.reply_text(f"✅ **Success!** Code {code} linked to platform stock: *{platform.upper()}*", parse_mode="Markdown")
+        await update.message.reply_text(f"✅ **Success!** Code `{code}` linked to platform stock: *{platform.upper()}*", parse_mode="Markdown")
     except Exception as e:
         await update.message.reply_text(f"❌ Error saving code: {e}")
 
@@ -314,7 +329,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ **Please provide a code!**\nUsage: /redeem <code>", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ **Please provide a code!**\nUsage: `/redeem <code>`", parse_mode="Markdown")
         return
 
     user_code = args[0].strip()
@@ -356,10 +371,10 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🎉 ════════════════════════════ 🎉\n"
                 f"   🎁 **REDEEMED: {found_platform.upper()} VIP** 🎁   \n"
                 "🎉 ════════════════════════════ 🎉\n\n"
-                f"💎 **Plan / Tier:** {account['plan']}\n"
-                f"🌍 **Region:** {account['region']}\n"
-                f"📧 **Username / Email:** {account['email']}\n"
-                f"🔑 **Password / Details:** {account['password']}\n\n"
+                f"💎 **Plan / Tier:** `{account['plan']}`\n"
+                f"🌍 **Region:** `{account['region']}`\n"
+                f"📧 **Username / Email:** `{account['email']}`\n"
+                f"🔑 **Password / Details:** `{account['password']}`\n\n"
                 "🔥 _Enjoy your premium drop from the vault!_"
             )
 
@@ -376,7 +391,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             if account.get("data") and len(str(account["data"])) > 10:
-                await update.message.reply_text(f"🛡 **SESSION DATA / COOKIE:**\n`{account['data']}`", parse_mode="Markdown")
+                await update.message.reply_text(f"🛡 **SESSION DATA / COOKIE:**\n```{account['data']}```", parse_mode="Markdown")
         else:
             await update.message.reply_text("❌ **Invalid or Already Used Code:** Please check your code and try again.")
     except Exception as e:
@@ -388,10 +403,10 @@ async def get_netflix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty**")
         return
-    caption = f"🎬 **NETFLIX VIP**\n📧 {account['email']}\n🔑 {account['password']}"
+    caption = f"🎬 **NETFLIX VIP**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
-    await update.message.reply_text(f"`{account['data']}`", parse_mode="Markdown")
+    await update.message.reply_text(f"```{account['data']}```", parse_mode="Markdown")
 
 async def get_crunchyroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -399,7 +414,7 @@ async def get_crunchyroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty**")
         return
-    caption = f"🌸 **CRUNCHYROLL VIP**\n📧 {account['email']}\n🔑 {account['password']}"
+    caption = f"🌸 **CRUNCHYROLL VIP**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -409,18 +424,18 @@ async def get_minecraft(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty**")
         return
-    caption = f"⛏️ **MINECRAFT VIP**\n👤 {account['email']}\n🔑 {account['password']}"
+    caption = f"⛏️ **MINECRAFT VIP**\n👤 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
     if account.get("data"):
-        await update.message.reply_text(f"`{account['data']}`", parse_mode="Markdown")
+        await update.message.reply_text(f"```{account['data']}```", parse_mode="Markdown")
 
 async def get_iptv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     account = get_random_text_account(IPTV_FILE, "IPTV")
     if not account:
         account = {"email": "crackhed01", "password": "dca2002a", "plan": "Silver", "region": "http://vpn.silver-iptval.store", "data": "http://vpn.silver-iptval.store/get.php?username=crackhed01&password=dca2002a&type=m3u_plus&output=ts"}
-    caption = f"📺 **IPTV STREAM**\n👤 {account['email']}\n🔑 {account['password']}\n🔗 {account['data']}"
+    caption = f"📺 **IPTV STREAM**\n👤 `{account['email']}`\n🔑 `{account['password']}`\n🔗 `{account['data']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -430,7 +445,7 @@ async def get_hotmail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty**")
         return
-    caption = f"📧 **HOTMAIL VIP**\n📧 {account['email']}\n🔑 {account['password']}"
+    caption = f"📧 **HOTMAIL VIP**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -440,7 +455,7 @@ async def get_steam(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty:** Steam database is empty.")
         return
-    caption = f"🎮 **STEAM VIP ACCOUNT**\n👤 {account['email']}\n🔑 {account['password']}"
+    caption = f"🎮 **STEAM VIP ACCOUNT**\n👤 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -450,7 +465,7 @@ async def get_spotify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty:** Spotify database is empty.")
         return
-    caption = f"🎧 **SPOTIFY PREMIUM VIP**\n📧 {account['email']}\n🔑 {account['password']}"
+    caption = f"🎧 **SPOTIFY PREMIUM VIP**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -460,7 +475,7 @@ async def get_kick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty:** Kick database is empty.")
         return
-    caption = f"🟣 **KICK VIP ACCOUNT**\n📧 {account['email']}\n🔑 {account['password']}"
+    caption = f"🟣 **KICK VIP ACCOUNT**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -470,7 +485,7 @@ async def get_g2a(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not account:
         await update.message.reply_text("⚠️ **Stock Empty:** G2A database is empty.")
         return
-    caption = f"🛒 **G2A VIP ACCOUNT / KEY**\n📧 {account['email']}\n🔑 {account['password']}"
+    caption = f"🛒 **G2A VIP ACCOUNT / KEY**\n📧 `{account['email']}`\n🔑 `{account['password']}`"
     keyboard = [[InlineKeyboardButton("⚠️ Account Not Work", callback_data="report_broken")]]
     await update.message.reply_animation(animation=EPIC_GIF_ID, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -486,7 +501,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "help_redeem":
         await query.message.reply_text(
             "💡 **How to use Redeem Codes:**\n\n"
-            "1. Type /redeem CODE or /reedem CODE in the chat.\n"
+            "1. Type `/redeem CODE` or `/reedem CODE` in the chat.\n"
             "2. The bot will automatically verify your code.\n"
             "3. You will receive a random VIP account instantly from the stock!",
             parse_mode="Markdown"
@@ -531,6 +546,15 @@ def main():
 
     # تشغيل خادم Flask الأساسي على العملية الرئيسية لكي ترضي منصة Railway ولا يحدث CRASHED أبداً
     port = int(os.environ.get("PORT", 8080))
+    
+    # تعريف خادم Flask هنا لمنع أي أخطاء في النطاق
+    from flask import Flask
+    app_flask = Flask(__name__)
+
+    @app_flask.route('/')
+    def health_check():
+        return "Bot and Web Server are active and running 24/7!", 200
+
     app_flask.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
