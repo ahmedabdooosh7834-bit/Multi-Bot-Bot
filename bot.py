@@ -332,11 +332,14 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_file = await context.bot.get_file(document.file_id)
         await new_file.download_to_drive(file_path)
 
-        # إذا كانت المنصة نتفليكس وملف مضغوط، احفظه مباشرة كملف الكوكيز الرئيسي للبوت
+        # إذا كانت المنصة نتفليكس وملف مضغوط، قم بحفظه مباشرة بالاسم المطلوب
         if "net" in platform and file_name.endswith('.zip'):
             if os.path.exists(NETFLIX_ZIP):
                 os.remove(NETFLIX_ZIP)
-            os.rename(file_path, NETFLIX_ZIP)
+            if file_path != NETFLIX_ZIP:
+                with open(file_path, 'rb') as src, open(NETFLIX_ZIP, 'wb') as dst:
+                    dst.write(src.read())
+                os.remove(file_path)
             await update.message.reply_text("✅ **Success!** Netflix cookies ZIP saved successfully as `x4015_Netflix_COOKIES.zip`.", parse_mode="Markdown")
             return
 
@@ -382,15 +385,7 @@ async def add_stock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ **Unsupported format:** Please upload only `.txt` or `.zip` files.")
 
     except Exception as e:
-        err_msg = str(e).lower()
-        if "too big" in err_msg or "400" in err_msg or "file is too big" in err_msg:
-            await update.message.reply_text(
-                "⚠️ **تنبيه:** ملف كبير جداً على تيليجرام (أقصى حد 20 ميجا).\n"
-                "💡 قم بتقسيمه لملفات أصغر وارفعها تباعاً وسيتم دمجها تلقائياً.",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(f"❌ Error: {e}")
+        await update.message.reply_text(f"❌ Error: {e}")
 
 async def add_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
